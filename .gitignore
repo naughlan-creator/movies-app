@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+!movies-frontend/.env.development
 
 # ---- OS clutter ----
 .DS_Store
