@@ -1,0 +1,16 @@
+# ---- Secrets: never commit these ----
+.env
+.env.*
+!.env.example
+
+# ---- OS clutter ----
+.DS_Store
+Thumbs.db
+
+# ---- IDE Settings (personal and machine-specific) ----
+.idea/
+.vscode/
+*.iml
+
+# ---- Claude Code personal settings ----
+.claude/
