@@ -7,6 +7,7 @@
 body{
   padding:0;
   margin:0;
+  background-color: black;
 }
 .App{
   display: flex;
@@ -14,5 +15,13 @@ body{
   min-height: 100vh;
   background-color: black;
   color:white;
-  margin-top:10px;
+}
+.App main{
+  flex: 1;
+}
+.app-footer{
+  padding: 1rem;
+  text-align: center;
+  font-size: 0.8rem;
+  color: #8a8a8a;
 }

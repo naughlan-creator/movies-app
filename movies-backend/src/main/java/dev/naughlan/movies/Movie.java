@@ -8,6 +8,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.DocumentReference;
 
+import java.time.Instant;
 import java.util.List;
 
 @Document(collection = "movies")
@@ -26,4 +27,14 @@ public class Movie {
     private List<String> backdrops;
     @DocumentReference // only puts ids and leaves data in its class
     private List<Review> reviewIds;
+
+    // Filled in from TMDB by TrendingMoviesSync
+    private Integer tmdbId;
+    private String overview;
+    private Integer runtime; // minutes
+    private Double rating; // TMDB audience score out of 10
+    private List<CastMember> cast;
+    private List<AudienceReview> audienceReviews;
+    private Integer trendingRank; // 1 = most trending this week, null = not trending
+    private Instant syncedAt;
 }

@@ -3,7 +3,9 @@
     background-color: black;
 }
 .movie-poster{
+    position: relative;
     height: 300px;
+    aspect-ratio: 2 / 3;
     border: 1px solid gold;
     border-radius: 10px;
     overflow: hidden;
@@ -11,7 +13,56 @@
 .movie-poster > img{
     height: 100%;
     width: 100%;
-
+    object-fit: cover;
+}
+/* Hidden until the poster is hovered or focused */
+.movie-poster-overlay{
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: 0.9rem;
+    background: linear-gradient(to top, rgba(0,0,0,0.95) 60%, rgba(0,0,0,0.6));
+    color: white;
+    font-size: 0.85rem;
+    opacity: 0;
+    transition: opacity 0.25s;
+}
+.movie-poster:hover .movie-poster-overlay,
+.movie-poster:focus-within .movie-poster-overlay{
+    opacity: 1;
+}
+.movie-synopsis{
+    margin: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 7;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.movie-starring{
+    margin: 0;
+    color: gold;
+}
+.movie-starring > span{
+    display: block;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #bbb;
+}
+.movie-trending-badge{
+    align-self: flex-start;
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+    background: gold;
+    color: black;
+    font-size: 0.75rem;
+    font-weight: bold;
+}
+.movie-meta{
+    color: #ccc;
 }
 .movie-card-container{
     height: 550px;
@@ -34,7 +85,13 @@
 .movie-title{
     color:white;
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.4rem;
+    max-width: 320px;
+}
+.movie-title > h4{
+    margin: 0;
 }
 
 .movie-buttons-container{

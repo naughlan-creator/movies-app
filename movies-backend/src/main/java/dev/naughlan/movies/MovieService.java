@@ -10,6 +10,10 @@ import java.util.Optional;
 public class MovieService {
     @Autowired
     private MovieRepository movieRepository;
-    public List<Movie> allMovies() { return movieRepository.findAll(); }
+    // This week's trending movies; falls back to everything if the TMDB sync has never run
+    public List<Movie> allMovies() {
+        List<Movie> trending = movieRepository.findByTrendingRankNotNullOrderByTrendingRankAsc();
+        return trending.isEmpty() ? movieRepository.findAll() : trending;
+    }
     public Optional<Movie> singleMovie(String imdbId) { return movieRepository.findMovieByImdbId(imdbId); }
 }

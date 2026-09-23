@@ -1,0 +1,83 @@
+.reviews-page{
+    padding-top: 1.5rem;
+    padding-bottom: 1.5rem;
+}
+.reviews-meta{
+    color: #bbb;
+}
+.reviews-poster{
+    width: 100%;
+    max-width: 300px;
+    border: 1px solid gold;
+    border-radius: 10px;
+}
+.reviews-section{
+    margin-bottom: 2rem;
+}
+.reviews-section > h5{
+    color: gold;
+}
+.reviews-empty{
+    color: #999;
+}
+
+.cast-list{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+.cast-member{
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-width: 180px;
+}
+.cast-member > img,
+.cast-photo-placeholder{
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+.cast-photo-placeholder{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #333;
+    color: gold;
+    font-weight: bold;
+}
+.cast-name{
+    font-weight: bold;
+}
+.cast-character{
+    color: #aaa;
+    font-size: 0.85rem;
+}
+
+.audience-review{
+    padding: 0.9rem 1rem;
+    margin-bottom: 0.8rem;
+    border-left: 3px solid gold;
+    background: #141414;
+    border-radius: 4px;
+}
+.audience-review-header{
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.4rem;
+}
+.audience-review-rating{
+    color: gold;
+    white-space: nowrap;
+}
+.audience-review > p{
+    margin-bottom: 0.4rem;
+    color: #ddd;
+}
+.audience-review > a{
+    color: #6cc7e0;
+    font-size: 0.85rem;
+}
