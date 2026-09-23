@@ -1,13 +1,13 @@
 package dev.naughlan.movies.tmdb;
 
+import java.time.Duration;
+import java.util.List;
+
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
-
-import java.time.Duration;
-import java.util.List;
 
 /**
  * The only class that talks HTTP to TMDB. Everything else works with Java records.
