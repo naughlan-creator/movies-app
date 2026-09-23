@@ -1,7 +1,6 @@
 package dev.naughlan.movies;
 
 import java.util.List;
-import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 
@@ -18,5 +17,8 @@ public class MovieService {
         List<Movie> trending = movieRepository.findByTrendingRankNotNullOrderByTrendingRankAsc();
         return trending.isEmpty() ? movieRepository.findAll() : trending;
     }
-    public Optional<Movie> singleMovie(String imdbId) { return movieRepository.findMovieByImdbId(imdbId); }
+    public Movie singleMovie(String imdbId) {
+        return movieRepository.findMovieByImdbId(imdbId)
+                .orElseThrow(() -> new MovieNotFoundException(imdbId));
+    }
 }
