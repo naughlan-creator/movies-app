@@ -1,5 +1,5 @@
 import './Reviews.css';
-import {useEffect, useRef} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import api from '../../api/axiosConfig';
 import {useParams} from 'react-router-dom';
 import {Container, Row, Col} from 'react-bootstrap';
@@ -13,6 +13,8 @@ const Reviews = ({getMovieData,movie,reviews,setReviews, movieNotFound}) => {
     let params = useParams();
     const movieId = params.movieId;
 
+    const [reviewError, setReviewError] = useState(null);
+
     useEffect(()=>{
         getMovieData(movieId);
     },[movieId])
@@ -21,20 +23,31 @@ const Reviews = ({getMovieData,movie,reviews,setReviews, movieNotFound}) => {
         e.preventDefault();
 
         const rev = revText.current;
+        setReviewError(null);
+
+        // Instant feedback without a network call. This is only for UX; the server checks again.
+        if (!rev.value.trim()) {
+            setReviewError("Write something before submitting.");
+            return;
+        }
 
         try
         {
             const response = await api.post("/api/v1/reviews",{reviewBody:rev.value,imdbId:movieId});
 
-            const updatedReviews = [...reviews, response.data];
+            setReviews([...reviews, response.data]);
 
             rev.value = "";
-
-            setReviews(updatedReviews);
         }
         catch(err)
         {
-            console.error(err);
+            const problem = err.response?.data;
+            if (err.response?.status === 400 && problem?.errors) {
+                setReviewError(Object.values(problem.errors).join(" "));
+            } else {
+                setReviewError("Couldn't save your review. Please try again.");
+                console.error(err);
+            }
         }
     }
 
@@ -106,6 +119,7 @@ const Reviews = ({getMovieData,movie,reviews,setReviews, movieNotFound}) => {
                 <section className="reviews-section">
                     <h5>Your reviews</h5>
                     <ReviewForm handleSubmit={addReview} revText={revText} labelText = "Write a Review?" />
+                    {reviewError && <p className="text-danger mt-2 mb-0">{reviewError}</p>}
                     <hr />
                     {reviews.map((r) => (
                         <div key={r.id}>

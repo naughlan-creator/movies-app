@@ -13,4 +13,5 @@ public interface MovieRepository extends MongoRepository<Movie, ObjectId> {
 
     // Spring Data builds the query from the method name: { trendingRank: { $ne: null } } sorted by trendingRank
     List<Movie> findByTrendingRankNotNullOrderByTrendingRankAsc();
+    boolean existsByImdbId(String imdbId);
 }
