@@ -5,8 +5,9 @@ import {useParams} from 'react-router-dom';
 import {Container, Row, Col} from 'react-bootstrap';
 import ReviewForm from '../reviewForm/ReviewForm';
 import { formatMeta } from '../../utils/movieFormat';
+import NotFound from '../notFound/NotFound';
 
-const Reviews = ({getMovieData,movie,reviews,setReviews}) => {
+const Reviews = ({getMovieData,movie,reviews,setReviews, movieNotFound}) => {
 
     const revText = useRef();
     let params = useParams();
@@ -39,6 +40,9 @@ const Reviews = ({getMovieData,movie,reviews,setReviews}) => {
 
     const cast = movie?.cast ?? [];
     const audienceReviews = movie?.audienceReviews ?? [];
+    if (movieNotFound) {
+        return <NotFound/>;
+    }
 
   return (
     <Container className="reviews-page">
@@ -103,8 +107,8 @@ const Reviews = ({getMovieData,movie,reviews,setReviews}) => {
                     <h5>Your reviews</h5>
                     <ReviewForm handleSubmit={addReview} revText={revText} labelText = "Write a Review?" />
                     <hr />
-                    {reviews?.map((r, i) => (
-                        <div key={i}>
+                    {reviews.map((r) => (
+                        <div key={r.id}>
                             <p className="mb-0">{r.body}</p>
                             <hr />
                         </div>
