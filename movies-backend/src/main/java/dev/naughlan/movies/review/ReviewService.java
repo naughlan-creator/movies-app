@@ -26,7 +26,7 @@ public class ReviewService {
         if (!movieRepository.existsByImdbId(imdbId)) {
             throw new MovieNotFoundException(imdbId);
         }
-        Review review = reviewRepository.insert(new Review(reviewBody));
+        Review review = reviewRepository.insert(new Review(reviewBody.trim()));
 
         mongoTemplate.update(Movie.class)
                 .matching(Criteria.where("imdbId").is(imdbId))
