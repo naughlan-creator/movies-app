@@ -23,7 +23,7 @@ function App() {
 
       const response = await api.get("/api/v1/movies");
 
-      setMovies(response.data);
+      setMovies(response.data.items);
 
     } 
     catch(err)
