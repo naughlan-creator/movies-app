@@ -1,6 +1,4 @@
-package dev.naughlan.movies.error;
-
-import dev.naughlan.movies.MovieNotFoundException;
+package dev.naughlan.movies.common;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -15,10 +13,10 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(MovieNotFoundException.class)
-    public ProblemDetail handleMovieNotFound(MovieNotFoundException ex) {
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ProblemDetail handleNotFound(ResourceNotFoundException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
-        problem.setTitle("Movie not found");
+        problem.setTitle(ex.getTitle());
         return problem;
     }
 

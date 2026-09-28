@@ -1,21 +1,22 @@
 package dev.naughlan.movies.tmdb;
 
-import dev.naughlan.movies.AudienceReview;
-import dev.naughlan.movies.CastMember;
-import dev.naughlan.movies.Movie;
-import org.springframework.stereotype.Component;
-
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+
+import org.springframework.stereotype.Component;
+
+import dev.naughlan.movies.movie.AudienceReview;
+import dev.naughlan.movies.movie.CastMember;
+import dev.naughlan.movies.movie.Movie;
 
 /**
  * Turns TMDB's response shape into our Movie shape. Pure logic, no HTTP or database,
  * so it can be unit tested with plain objects.
  */
 @Component
-public class TmdbMovieMapper {
+class TmdbMovieMapper {
 
     static final int CAST_LIMIT = 3;
     static final int REVIEW_LIMIT = 3;

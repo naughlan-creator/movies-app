@@ -1,4 +1,4 @@
-package dev.naughlan.movies;
+package dev.naughlan.movies.movie;
 
 import java.util.List;
 

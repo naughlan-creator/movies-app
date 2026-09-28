@@ -1,6 +1,9 @@
 package dev.naughlan.movies.tmdb;
 
-import dev.naughlan.movies.Movie;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -12,9 +15,7 @@ import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientException;
 
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
+import dev.naughlan.movies.movie.Movie;
 
 /**
  * On every startup, replaces the "trending this week" list with fresh data from TMDB.

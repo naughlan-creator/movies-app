@@ -1,14 +1,16 @@
-package dev.naughlan.movies;
-
-import org.junit.jupiter.api.Test;
-import org.springframework.data.mongodb.core.MongoTemplate;
+package dev.naughlan.movies.review;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.junit.jupiter.api.Test;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import org.springframework.data.mongodb.core.MongoTemplate;
+
+import dev.naughlan.movies.movie.MovieNotFoundException;
+import dev.naughlan.movies.movie.MovieRepository;
 
 class ReviewServiceTest {
 

@@ -1,9 +1,13 @@
-package dev.naughlan.movies;
+package dev.naughlan.movies.review;
 
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Service;
+
+import dev.naughlan.movies.movie.Movie;
+import dev.naughlan.movies.movie.MovieNotFoundException;
+import dev.naughlan.movies.movie.MovieRepository;
 
 @Service
 public class ReviewService {

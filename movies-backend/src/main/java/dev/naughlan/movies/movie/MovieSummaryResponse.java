@@ -1,10 +1,7 @@
-package dev.naughlan.movies.dto;
+package dev.naughlan.movies.movie;
 
 import java.util.List;
 import java.util.Objects;
-
-import dev.naughlan.movies.CastMember;
-import dev.naughlan.movies.Movie;
 
 public record MovieSummaryResponse(
     String imdbId,

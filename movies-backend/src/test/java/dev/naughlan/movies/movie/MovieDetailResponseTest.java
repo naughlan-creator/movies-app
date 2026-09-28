@@ -1,4 +1,4 @@
-package dev.naughlan.movies.dto;
+package dev.naughlan.movies.movie;
 
 import java.util.List;
 
@@ -6,8 +6,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.bson.types.ObjectId;
 import org.junit.jupiter.api.Test;
 
-import dev.naughlan.movies.Movie;
-import dev.naughlan.movies.Review;
+import dev.naughlan.movies.review.Review;
+import dev.naughlan.movies.review.ReviewResponse;
 
 class MovieDetailResponseTest {
     @Test

@@ -1,4 +1,4 @@
-package dev.naughlan.movies;
+package dev.naughlan.movies.review;
 
 import org.bson.types.ObjectId;
 import org.springframework.data.mongodb.repository.MongoRepository;

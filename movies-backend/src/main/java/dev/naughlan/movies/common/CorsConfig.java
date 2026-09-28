@@ -1,4 +1,4 @@
-package dev.naughlan.movies.config;
+package dev.naughlan.movies.common;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;

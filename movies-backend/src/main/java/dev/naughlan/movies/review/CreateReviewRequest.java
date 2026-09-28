@@ -1,4 +1,4 @@
-package dev.naughlan.movies.dto;
+package dev.naughlan.movies.review;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;

@@ -13,7 +13,7 @@ import org.springframework.web.client.RestClient;
  * The only class that talks HTTP to TMDB. Everything else works with Java records.
  */
 @Component
-public class TmdbClient {
+class TmdbClient {
 
     private final RestClient restClient;
 

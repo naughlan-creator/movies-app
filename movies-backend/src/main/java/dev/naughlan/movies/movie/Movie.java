@@ -1,15 +1,17 @@
-package dev.naughlan.movies;
+package dev.naughlan.movies.movie;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import java.time.Instant;
+import java.util.List;
+
 import org.bson.types.ObjectId;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.DocumentReference;
 
-import java.time.Instant;
-import java.util.List;
+import dev.naughlan.movies.review.Review;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Document(collection = "movies")
 @Data // checks all fields of the Document are added

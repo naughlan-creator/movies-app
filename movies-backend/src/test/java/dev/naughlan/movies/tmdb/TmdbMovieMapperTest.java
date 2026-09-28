@@ -1,7 +1,8 @@
 package dev.naughlan.movies.tmdb;
 
-import dev.naughlan.movies.AudienceReview;
-import dev.naughlan.movies.Movie;
+import dev.naughlan.movies.movie.AudienceReview;
+import dev.naughlan.movies.movie.Movie;
+
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 

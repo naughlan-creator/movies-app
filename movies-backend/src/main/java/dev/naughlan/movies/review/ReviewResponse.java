@@ -1,6 +1,4 @@
-package dev.naughlan.movies.dto;
-
-import dev.naughlan.movies.Review;
+package dev.naughlan.movies.review;
 
 public record  ReviewResponse(String id, String body) {
     public static ReviewResponse from(Review review) {

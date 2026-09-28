@@ -1,4 +1,4 @@
-package dev.naughlan.movies;
+package dev.naughlan.movies.review;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -7,8 +7,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import dev.naughlan.movies.dto.CreateReviewRequest;
-import dev.naughlan.movies.dto.ReviewResponse;
 import jakarta.validation.Valid;
 
 @RestController
