@@ -61,4 +61,19 @@ public class GlobalExceptionHandler {
         problem.setTitle("Malformed request");
         return problem;
     }
+
+    @ExceptionHandler(ResourceConflictException.class)
+    public ProblemDetail handleConflict(ResourceConflictException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problem.setTitle(ex.getTitle());
+        return problem;
+    }
+
+    @ExceptionHandler(InvalidRequestException.class)
+    public ProblemDetail handleInvalidRequest(InvalidRequestException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "One or more fields are invalid");
+        problem.setTitle("Invalid request");
+        problem.setProperty("errors", Map.of(ex.getField(), ex.getMessage()));
+        return problem;
+    }
 }
