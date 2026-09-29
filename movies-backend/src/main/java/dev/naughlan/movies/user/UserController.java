@@ -40,7 +40,7 @@ public class UserController {
     }
 
     @Operation(summary = "The currently logged-in user")
-    @SecurityRequirement(name = "basicAuth")
+    @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/me")
     public UserResponse me(Authentication authentication) {
         return UserResponse.from(userService.findByUsername(authentication.getName()));

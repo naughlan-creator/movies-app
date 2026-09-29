@@ -19,8 +19,9 @@ public class OpenApiConfig {
                     .version("v1")
                     .description("This week's trending movies from TMDB, with synopsis, top cast, viewer reviews and reviews written in this app."))
             .components(new Components()
-                    .addSecuritySchemes("basicAuth", new SecurityScheme()
-                            .type(SecurityScheme.Type.HTTP)
-                            .scheme("basic")));
+                    .addSecuritySchemes("bearerAuth", new SecurityScheme()
+                        .type(SecurityScheme.Type.HTTP)
+                        .scheme("bearer")
+                        .bearerFormat("JWT")));
     }
 }

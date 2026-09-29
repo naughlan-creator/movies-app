@@ -6,11 +6,14 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
@@ -19,6 +22,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.servlet.HandlerExceptionResolver;
 
 @Configuration
+@Import(JwtConfig.class)
 public class SecurityConfig {
 
     @Bean
@@ -28,8 +32,11 @@ public class SecurityConfig {
 
         // Filters run before @RestControllerAdvice can see anything, so hand security
         // errors to it explicitly: 401/403 then use the same ProblemDetail format as everything else
-        AuthenticationEntryPoint problemDetailEntryPoint =
-                (request, response, ex) -> exceptionResolver.resolveException(request, response, null, ex);
+        AuthenticationEntryPoint problemDetailEntryPoint = (request, response, ex) -> {
+            // RFC 6750: a 401 must tell the client which authentication scheme to use
+            response.setHeader("WWW-Authenticate", "Bearer");
+            exceptionResolver.resolveException(request, response, null, ex);
+        };
 
         http
                 .cors(Customizer.withDefaults())
@@ -37,18 +44,33 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.GET, "/api/v1/movies", "/api/v1/movies/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/users").permitAll()
+                        // "*" matches exactly one path segment; new sub-paths stay protected by default
+                        .requestMatchers(HttpMethod.GET, "/api/v1/movies", "/api/v1/movies/*").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/users", "/api/v1/auth/token").permitAll()
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs*", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated())
-                .httpBasic(basic -> basic.authenticationEntryPoint(problemDetailEntryPoint))
+                .oauth2ResourceServer(oauth2 -> oauth2
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
+                        .authenticationEntryPoint(problemDetailEntryPoint))
                 .exceptionHandling(errors -> errors
                         .authenticationEntryPoint(problemDetailEntryPoint)
                         .accessDeniedHandler((request, response, ex) ->
                                 exceptionResolver.resolveException(request, response, null, ex)));
 
         return http.build();
+    }
+
+    // Reads our "roles" claim (["USER"]) into Spring authorities (ROLE_USER),
+    // so hasRole("ADMIN") works in step 2.4
+    private static JwtAuthenticationConverter jwtAuthenticationConverter() {
+        JwtGrantedAuthoritiesConverter authorities = new JwtGrantedAuthoritiesConverter();
+        authorities.setAuthoritiesClaimName("roles");
+        authorities.setAuthorityPrefix("ROLE_");
+
+        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
+        converter.setJwtGrantedAuthoritiesConverter(authorities);
+        return converter;
     }
 
     @Bean
