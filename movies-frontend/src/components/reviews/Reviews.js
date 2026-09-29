@@ -42,7 +42,9 @@ const Reviews = ({getMovieData,movie,reviews,setReviews, movieNotFound}) => {
         catch(err)
         {
             const problem = err.response?.data;
-            if (err.response?.status === 400 && problem?.errors) {
+            if (err.response?.status === 401) {
+                setReviewError("Log in to write a review.");
+            } else if (err.response?.status === 400 && problem?.errors) {
                 setReviewError(Object.values(problem.errors).join(" "));
             } else {
                 setReviewError("Couldn't save your review. Please try again.");

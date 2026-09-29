@@ -13,6 +13,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -63,5 +65,40 @@ class UserApiIntegrationTest {
         mockMvc.perform(post("/api/v1/users").contentType(MediaType.APPLICATION_JSON).content(body.formatted("ALICE")))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.title").value("Username taken"));
+    }
+
+    private static final String PASSWORD = "correct horse battery staple";
+
+    private void register(String username) throws Exception {
+        mockMvc.perform(post("/api/v1/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"username": "%s", "password": "%s"}
+                                """.formatted(username, PASSWORD)))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void meReturnsTheLoggedInUser() throws Exception {
+        register("movie_fan");
+        
+        mockMvc.perform(get("/api/v1/users/me").with(httpBasic("Movie_Fan", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.username").value("movie_fan"));
+    }
+        
+    @Test
+    void wrongPasswordAndUnknownUserGetIdenticalResponses() throws Exception {
+        register("movie_fan");
+
+        String wrongPassword = mockMvc.perform(get("/api/v1/users/me").with(httpBasic("movie_fan", "not the right password")))
+                .andExpect(status().isUnauthorized())
+                .andReturn().getResponse().getContentAsString();
+
+        String unknownUser = mockMvc.perform(get("/api/v1/users/me").with(httpBasic("nobody_here", "not the right password")))
+                .andExpect(status().isUnauthorized())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(unknownUser).isEqualTo(wrongPassword);
     }
 }

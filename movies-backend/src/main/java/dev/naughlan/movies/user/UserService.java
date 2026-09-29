@@ -2,6 +2,8 @@ package dev.naughlan.movies.user;
 
 import dev.naughlan.movies.common.InvalidRequestException;
 import dev.naughlan.movies.common.ResourceConflictException;
+import dev.naughlan.movies.common.ResourceNotFoundException;
+
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -42,5 +44,10 @@ public class UserService {
         } catch (DuplicateKeyException e) {
             throw new ResourceConflictException("Username taken", "That username is already taken");
         }
+    }
+
+    public User findByUsername(String username) {
+        return userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found", "No user named " + username));
     }
 }

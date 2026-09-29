@@ -18,6 +18,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -57,6 +58,7 @@ class MovieApiIntegrationTest {
     @Test
     void savedReviewIsReturnedWithItsMovie() throws Exception {
         mockMvc.perform(post("/api/v1/reviews")
+                        .with(user("movie_fan"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"reviewBody": "  Great film  ", "imdbId": "tt0000001"}
@@ -74,11 +76,24 @@ class MovieApiIntegrationTest {
     @Test
     void reviewForUnknownMovieIsRejectedAndNothingIsSaved() throws Exception {
         mockMvc.perform(post("/api/v1/reviews")
+                        .with(user("movie_fan"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"reviewBody": "Orphan attempt", "imdbId": "tt0000000"}
                                 """))
                 .andExpect(status().isNotFound());
+
+        assertThat(reviewRepository.count()).isZero();
+    }
+
+    @Test
+    void postingAReviewWithoutLoggingInIs401() throws Exception {
+        mockMvc.perform(post("/api/v1/reviews")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reviewBody": "Anonymous", "imdbId": "tt0000001"}
+                                """))
+                .andExpect(status().isUnauthorized());
 
         assertThat(reviewRepository.count()).isZero();
     }

@@ -4,11 +4,14 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -34,5 +37,12 @@ public class UserController {
     public ResponseEntity<UserResponse> register(@Valid @RequestBody CreateUserRequest request) {
         User user = userService.register(request.username(), request.password());
         return ResponseEntity.status(HttpStatus.CREATED).body(UserResponse.from(user));
+    }
+
+    @Operation(summary = "The currently logged-in user")
+    @SecurityRequirement(name = "basicAuth")
+    @GetMapping("/me")
+    public UserResponse me(Authentication authentication) {
+        return UserResponse.from(userService.findByUsername(authentication.getName()));
     }
 }
