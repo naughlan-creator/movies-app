@@ -4,9 +4,18 @@ import Button from "react-bootstrap/Button";
 import Container from "react-bootstrap/Container"
 import Nav from "react-bootstrap/Nav";
 import Navbar from "react-bootstrap/Navbar";
-import {NavLink} from "react-router-dom";
+import {Link, NavLink, useLocation, useNavigate} from "react-router-dom";
+import { useAuth } from "../../auth/AuthContext";
 
 const Header = () => {
+    const { user, ready, logout } = useAuth();
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    const handleLogout = () => {
+        logout();
+        navigate('/');
+    };
  
 return (
     <Navbar bg="dark" variant="dark" expand="lg">
@@ -22,10 +31,19 @@ return (
                         navbarScroll
                     >
                     <NavLink className ="nav-link" to="/">Home</NavLink>
-                    <NavLink className ="nav-link" to="/watchList">Watch List</NavLink>      
+                    <NavLink className ="nav-link" to="/watchList">Watch List</NavLink>
                 </Nav>
-                <Button variant="outline-info" className="me-2">Login</Button>
-                <Button variant="outline-info">Register</Button>
+                {ready && (user ? (
+                    <>
+                        <Navbar.Text className="me-3">Signed in as <strong>{user.username}</strong></Navbar.Text>
+                        <Button variant="outline-info" onClick={handleLogout}>Log out</Button>
+                    </>
+                ) : (
+                    <>
+                        <Button as={Link} to="/login" state={{ from: location.pathname }} variant="outline-info" className="me-2">Login</Button>
+                        <Button as={Link} to="/register" state={{ from: location.pathname }} variant="outline-info">Register</Button>
+                    </>
+                ))}
             </Navbar.Collapse>
         </Container>
     </Navbar>

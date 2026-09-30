@@ -1,7 +1,8 @@
 import './Reviews.css';
 import {useEffect, useRef, useState} from 'react';
 import api from '../../api/axiosConfig';
-import {useParams} from 'react-router-dom';
+import {Link, useLocation, useParams} from 'react-router-dom';
+import { useAuth } from '../../auth/AuthContext';
 import {Container, Row, Col} from 'react-bootstrap';
 import ReviewForm from '../reviewForm/ReviewForm';
 import { formatMeta } from '../../utils/movieFormat';
@@ -43,7 +44,7 @@ const Reviews = ({getMovieData,movie,reviews,setReviews, movieNotFound}) => {
         {
             const problem = err.response?.data;
             if (err.response?.status === 401) {
-                setReviewError("Log in to write a review.");
+                setReviewError("Your session expired. Log in again to write a review.");
             } else if (err.response?.status === 400 && problem?.errors) {
                 setReviewError(Object.values(problem.errors).join(" "));
             } else {
@@ -55,6 +56,8 @@ const Reviews = ({getMovieData,movie,reviews,setReviews, movieNotFound}) => {
 
     const cast = movie?.cast ?? [];
     const audienceReviews = movie?.audienceReviews ?? [];
+    const { user } = useAuth();
+    const location = useLocation();
     if (movieNotFound) {
         return <NotFound/>;
     }
@@ -120,7 +123,11 @@ const Reviews = ({getMovieData,movie,reviews,setReviews, movieNotFound}) => {
 
                 <section className="reviews-section">
                     <h5>Your reviews</h5>
-                    <ReviewForm handleSubmit={addReview} revText={revText} labelText = "Write a Review?" />
+                    {user ? (
+                        <ReviewForm handleSubmit={addReview} revText={revText} labelText = "Write a Review?" />
+                    ) : (
+                        <p><Link to="/login" state={{ from: location.pathname }}>Log in</Link> to write a review.</p>
+                    )}
                     {reviewError && <p className="text-danger mt-2 mb-0">{reviewError}</p>}
                     <hr />
                     {reviews.map((r) => (
