@@ -43,7 +43,7 @@ class ReviewControllerTest {
                 .andExpect(jsonPath("$.errors.reviewBody").exists())
                 .andExpect(jsonPath("$.errors.imdbId").exists());
 
-        verify(reviewService, never()).createReview(anyString(), anyString());
+        verify(reviewService, never()).createReview(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -66,6 +66,6 @@ class ReviewControllerTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.title").value("Authentication required"));
 
-        verify(reviewService, never()).createReview(anyString(), anyString());
+        verify(reviewService, never()).createReview(anyString(), anyString(), anyString());
     }
 }

@@ -28,11 +28,11 @@ class UserServiceTest {
     void storesAHashNeverThePasswordAndLowercasesTheUsername() {
         when(repository.insert(any(User.class))).thenAnswer(call -> call.getArgument(0));
 
-        service.register("Movie_Fan", PASSWORD);
+        service.register("Movie_Fan_43", PASSWORD);
 
         ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
         verify(repository).insert(saved.capture());
-        assertThat(saved.getValue().username()).isEqualTo("movie_fan");
+        assertThat(saved.getValue().username()).isEqualTo("movie_fan_43");
         assertThat(saved.getValue().passwordHash())
                 .startsWith("{bcrypt}")
                 .doesNotContain(PASSWORD);

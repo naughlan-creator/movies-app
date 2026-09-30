@@ -5,6 +5,9 @@ import dev.naughlan.movies.common.ResourceConflictException;
 import dev.naughlan.movies.common.ResourceNotFoundException;
 
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -49,5 +52,9 @@ public class UserService {
     public User findByUsername(String username) {
         return userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found", "No user named " + username));
+    }
+
+    public Page<User> listUsers(int page, int size) {
+        return userRepository.findAll(PageRequest.of(page, size, Sort.by("username")));
     }
 }

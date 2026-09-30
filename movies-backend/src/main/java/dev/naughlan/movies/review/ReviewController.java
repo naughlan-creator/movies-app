@@ -8,6 +8,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import org.springframework.security.core.Authentication; 
+import org.springframework.web.bind.annotation.DeleteMapping; 
+import org.springframework.web.bind.annotation.PathVariable; 
+import org.springframework.web.bind.annotation.ResponseStatus;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -36,8 +41,26 @@ public class ReviewController {
             content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
     @SecurityRequirement(name = "bearerAuth")
     @PostMapping
-    public ResponseEntity<ReviewResponse> createReview(@Valid @RequestBody CreateReviewRequest request) {
-        Review review = reviewService.createReview(request.reviewBody(), request.imdbId());
+    public ResponseEntity<ReviewResponse> createReview(@Valid @RequestBody CreateReviewRequest request,
+                                                    Authentication authentication) {
+        Review review = reviewService.createReview(request.reviewBody(), request.imdbId(), authentication.getName());
         return ResponseEntity.status(HttpStatus.CREATED).body(ReviewResponse.from(review));
+    }
+
+    @Operation(summary = "Delete a review (its author or an admin)")
+    @ApiResponse(responseCode = "204", description = "Review deleted")
+    @ApiResponse(responseCode = "401", description = "Not logged in",
+            content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(responseCode = "403", description = "Not the author and not an admin",
+            content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(responseCode = "404", description = "No review with that id",
+            content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
+    @SecurityRequirement(name = "bearerAuth")
+    @DeleteMapping("/{reviewId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteReview(@PathVariable String reviewId, Authentication authentication) {
+        boolean isAdmin = authentication.getAuthorities().stream()
+                .anyMatch(authority -> authority.getAuthority().equals("ROLE_ADMIN"));
+        reviewService.deleteReview(reviewId, authentication.getName(), isAdmin);
     }
 }

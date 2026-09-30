@@ -3,7 +3,7 @@ import {useEffect, useRef, useState} from 'react';
 import api from '../../api/axiosConfig';
 import {Link, useLocation, useParams} from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
-import {Container, Row, Col} from 'react-bootstrap';
+import {Button, Container, Row, Col} from 'react-bootstrap';
 import ReviewForm from '../reviewForm/ReviewForm';
 import { formatMeta } from '../../utils/movieFormat';
 import NotFound from '../notFound/NotFound';
@@ -53,6 +53,29 @@ const Reviews = ({getMovieData,movie,reviews,setReviews, movieNotFound}) => {
             }
         }
     }
+
+    // UX only: decides whether to SHOW the button. The server makes the real decision.
+    const canDelete = (review) =>
+        user && (user.username === review.author || user.roles?.includes('ADMIN'));
+
+    const deleteReview = async (review) => {
+        if (!window.confirm('Delete this review?')) return;
+        setReviewError(null);
+        try {
+            await api.delete(`/api/v1/reviews/${review.id}`);
+            setReviews(reviews.filter((r) => r.id !== review.id));
+        } catch (err) {
+            if (err.response?.status === 403) {
+                setReviewError("You can only delete your own reviews.");
+            } else if (err.response?.status === 404) {
+                // Already gone (e.g. deleted in another tab): just drop it from the list
+                setReviews(reviews.filter((r) => r.id !== review.id));
+            } else {
+                setReviewError("Couldn't delete the review. Please try again.");
+                console.error(err);
+            }
+        }
+    };
 
     const cast = movie?.cast ?? [];
     const audienceReviews = movie?.audienceReviews ?? [];
@@ -131,7 +154,16 @@ const Reviews = ({getMovieData,movie,reviews,setReviews, movieNotFound}) => {
                     {reviewError && <p className="text-danger mt-2 mb-0">{reviewError}</p>}
                     <hr />
                     {reviews.map((r) => (
-                        <div key={r.id}>
+                        <div key={r.id} className="app-review">
+                            <div className="app-review-header">
+                                <strong>{r.author ?? 'Early reviewer'}</strong>
+                                {r.createdAt && <span className="app-review-date">{new Date(r.createdAt).toLocaleDateString()}</span>}
+                                {canDelete(r) && (
+                                    <Button variant="link" size="sm" className="text-danger p-0 ms-auto" onClick={() => deleteReview(r)}>
+                                        Delete
+                                    </Button>
+                                )}
+                            </div>
                             <p className="mb-0">{r.body}</p>
                             <hr />
                         </div>
