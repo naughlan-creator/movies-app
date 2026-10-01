@@ -1,0 +1,82 @@
+# Runs on every push to main and on every pull request.
+# A red pipeline means: don't merge, don't deploy.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Least privilege for the automatic GITHUB_TOKEN: these jobs only read the code
+permissions:
+  contents: read
+
+# A newer push to the same branch cancels the older, now-pointless run
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend - build and test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: movies-backend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      # Unit, slice and integration tests. Testcontainers starts MongoDB, Kafka and Redis
+      # in Docker, which GitHub's Ubuntu runners provide. No .env, Atlas, Keycloak or TMDB needed.
+      - name: Build and test
+        run: ./mvnw --batch-mode verify
+
+      - name: Keep the test reports when something fails
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: surefire-reports
+          path: movies-backend/target/surefire-reports
+
+  frontend:
+    name: Frontend - lint and build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: movies-frontend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: movies-frontend/package-lock.json
+
+      # npm ci installs exactly what package-lock.json says (npm install may update it)
+      - run: npm ci
+
+      # CI=true makes Create React App fail the build on lint warnings
+      - name: Build
+        run: npm run build
+        env:
+          CI: true
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The full history, so a secret committed and later deleted is still found
+          fetch-depth: 0
+
+      - uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,6 @@
+# Findings reviewed and accepted. Each entry needs a reason; never add one just to make CI green.
+#
+# The HS256 signing key in application-test.properties (step 2.3) was a deliberately public,
+# test-only key: it only signed tokens inside throwaway test runs. Self-signed tokens were removed
+# when authentication moved to Keycloak, so the key no longer exists in the code and signs nothing.
+46e68707a19a642b7f61d3055fd645d3f9578c43:movies-backend/src/test/resources/application-test.properties:generic-api-key:12

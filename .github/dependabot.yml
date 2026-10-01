@@ -1,0 +1,25 @@
+# Dependabot opens pull requests when dependencies have updates, including security fixes.
+# The CI workflow then tells you whether each update is safe to merge.
+version: 2
+updates:
+  - package-ecosystem: maven
+    directory: /movies-backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm
+    directory: /movies-frontend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
