@@ -1,0 +1,29 @@
+# Local infrastructure for the movie app.
+# Start everything:  docker compose up -d
+# Values like ${KEYCLOAK_ADMIN_PASSWORD} come from ./.env (copy .env.example).
+#
+# Host ports avoid the ranges Windows reserves for Hyper-V/WSL (e.g. 8000-8554, 6274-6473),
+# which is why they look unusual. See README.md for the full port map.
+
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.4
+    # start-dev: plain HTTP and an embedded database. Development only; production uses `start`,
+    # which requires TLS and an external database.
+    # --import-realm: on first start, create realms from ./keycloak/import
+    command: start-dev --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      # Pin the public URL so the token issuer ("iss") is always the same,
+      # however Keycloak is reached; other containers may use the internal hostname.
+      KC_HOSTNAME: http://localhost:18180
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+    ports:
+      - "18180:8080"
+    volumes:
+      - keycloak-data:/opt/keycloak/data
+      - ./keycloak/import:/opt/keycloak/data/import:ro
+
+volumes:
+  keycloak-data:
