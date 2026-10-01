@@ -3,18 +3,25 @@ package dev.naughlan.movies.movie;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import dev.naughlan.movies.common.JsonCache;
 import dev.naughlan.movies.security.SecurityConfig;
+import tools.jackson.databind.json.JsonMapper;
 
+import java.time.Duration;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -33,6 +40,15 @@ class MovieControllerTest {
 
     @MockitoBean
     private MovieService movieService;
+
+    // The web slice has no Redis: use the real cache code with caching switched off (always loads)
+    @TestConfiguration
+    static class PassThroughCache {
+        @Bean
+        MovieCache movieCache() {
+            return new MovieCache(new JsonCache(mock(StringRedisTemplate.class), JsonMapper.builder().build(), false, Duration.ZERO));
+        }
+    }
 
     @Test
     void returnsFirstPageWithDefaultSize() throws Exception {

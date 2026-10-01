@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientException;
 
 import dev.naughlan.movies.movie.Movie;
+import dev.naughlan.movies.movie.MovieCache;
 
 /**
  * On every startup, replaces the "trending this week" list with fresh data from TMDB.
@@ -30,13 +31,15 @@ public class TrendingMoviesSync {
     private final TmdbClient tmdbClient;
     private final TmdbMovieMapper mapper;
     private final MongoTemplate mongoTemplate;
+    private final MovieCache movieCache;
 
     public TrendingMoviesSync(TmdbProperties properties, TmdbClient tmdbClient,
-                              TmdbMovieMapper mapper, MongoTemplate mongoTemplate) {
+                              TmdbMovieMapper mapper, MongoTemplate mongoTemplate, MovieCache movieCache) {
         this.properties = properties;
         this.tmdbClient = tmdbClient;
         this.mapper = mapper;
         this.mongoTemplate = mongoTemplate;
+        this.movieCache = movieCache;
     }
 
     // ApplicationReadyEvent fires once the web server is up, so a slow TMDB doesn't delay startup
@@ -90,6 +93,8 @@ public class TrendingMoviesSync {
                     tmdbFields(movie),
                     Movie.class);
         }
+        // The trending list and movie details just changed: drop every cached movie response
+        movieCache.invalidateAll();
         return trending.size();
     }
 

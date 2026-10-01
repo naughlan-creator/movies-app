@@ -16,6 +16,8 @@ import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Component;
 
+import dev.naughlan.movies.movie.MovieCache;
+
 /**
  * Gives movies that have reviews but no reviewCount yet (reviews written before the event pipeline
  * existed) their count. After that, ReviewCountProjector keeps it current. Runs after the review
@@ -28,9 +30,11 @@ class ReviewCountBackfill implements ApplicationRunner {
     private static final Logger log = LoggerFactory.getLogger(ReviewCountBackfill.class);
 
     private final MongoTemplate mongoTemplate;
+    private final MovieCache movieCache;
 
-    ReviewCountBackfill(MongoTemplate mongoTemplate) {
+    ReviewCountBackfill(MongoTemplate mongoTemplate, MovieCache movieCache) {
         this.mongoTemplate = mongoTemplate;
+        this.movieCache = movieCache;
     }
 
     @Override
@@ -53,6 +57,7 @@ class ReviewCountBackfill implements ApplicationRunner {
         }
         if (updated > 0) {
             log.info("Backfilled reviewCount on {} movies", updated);
+            movieCache.invalidateAll();
         }
         return updated;
     }

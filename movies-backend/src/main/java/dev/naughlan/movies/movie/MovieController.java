@@ -22,9 +22,11 @@ import jakarta.validation.constraints.Min;
 @RequestMapping("/api/v1/movies")
 public class MovieController {
     private final MovieService movieService;
+    private final MovieCache movieCache;
 
-    public MovieController(MovieService movieService) {
+    public MovieController(MovieService movieService, MovieCache movieCache) {
         this.movieService = movieService;
+        this.movieCache = movieCache;
     }
 
     @Operation(
@@ -34,10 +36,12 @@ public class MovieController {
     public PageResponse<MovieSummaryResponse> getAllMovies(
             @Parameter(description = "Zero-based page number") @RequestParam(defaultValue = "0") @Min(0) int page,
             @Parameter(description = "Movies per page") @RequestParam(defaultValue = "10") @Min(1) @Max(50) int size) {
-        return PageResponse.from(movieService.allMovies(page, size).map(MovieSummaryResponse::from));
+        // Served from Redis when cached; MongoDB is only queried on a miss
+        return movieCache.list(page, size,
+                () -> PageResponse.from(movieService.allMovies(page, size).map(MovieSummaryResponse::from)));
     }
     
-    @Operation(summary = "Get one movie with its cast, viewer reviews and reviews written in this app")
+    @Operation(summary = "Get one movie with its synopsis, cast and viewer reviews from TMDB")
     @ApiResponse(responseCode = "200", description = "Movie found")
     @ApiResponse(responseCode = "404", description = "No movie with that IMDb id",
             content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
@@ -45,6 +49,7 @@ public class MovieController {
     public MovieDetailResponse getSingleMovie(
         @Parameter(description = "IMDb id of the movie", example = "tt3915174") @PathVariable String imdbId
     ) {
-        return MovieDetailResponse.from(movieService.singleMovie(imdbId));
+        // A missing movie throws inside the loader, so 404s are never cached
+        return movieCache.detail(imdbId, () -> MovieDetailResponse.from(movieService.singleMovie(imdbId)));
     }
 }

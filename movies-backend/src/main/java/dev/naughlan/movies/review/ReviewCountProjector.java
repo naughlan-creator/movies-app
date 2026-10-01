@@ -10,6 +10,7 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 import dev.naughlan.movies.movie.Movie;
+import dev.naughlan.movies.movie.MovieCache;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -27,11 +28,14 @@ class ReviewCountProjector {
     private final JsonMapper jsonMapper;
     private final ReviewRepository reviewRepository;
     private final MongoTemplate mongoTemplate;
+    private final MovieCache movieCache;
 
-    ReviewCountProjector(JsonMapper jsonMapper, ReviewRepository reviewRepository, MongoTemplate mongoTemplate) {
+    ReviewCountProjector(JsonMapper jsonMapper, ReviewRepository reviewRepository, MongoTemplate mongoTemplate,
+                         MovieCache movieCache) {
         this.jsonMapper = jsonMapper;
         this.reviewRepository = reviewRepository;
         this.mongoTemplate = mongoTemplate;
+        this.movieCache = movieCache;
     }
 
     // Each consumer group gets its own copy of every event. Future consumers (moderation, sentiment,
@@ -48,6 +52,8 @@ class ReviewCountProjector {
                 Query.query(Criteria.where("imdbId").is(event.imdbId())),
                 new Update().set("reviewCount", count),
                 Movie.class);
+        // reviewCount is part of the cached movie responses
+        movieCache.invalidateAll();
         log.debug("{} {} -> movie {} now has {} reviews", event.type(), event.reviewId(), event.imdbId(), count);
     }
 }

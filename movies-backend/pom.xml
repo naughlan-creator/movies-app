@@ -116,6 +116,11 @@
 			<artifactId>awaitility</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!-- Read-through cache for movie responses -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-redis</artifactId>
+		</dependency>
 		<!-- Architecture rules as tests (e.g. no cycles between feature packages) -->
 		<dependency>
 			<groupId>com.tngtech.archunit</groupId>

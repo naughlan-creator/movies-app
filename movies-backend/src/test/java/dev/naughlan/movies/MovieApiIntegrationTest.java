@@ -24,6 +24,7 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import com.jayway.jsonpath.JsonPath;
 
 import dev.naughlan.movies.movie.Movie;
+import dev.naughlan.movies.movie.MovieCache;
 import dev.naughlan.movies.movie.MovieRepository;
 import dev.naughlan.movies.review.ReviewRepository;
 
@@ -42,10 +43,15 @@ class MovieApiIntegrationTest {
     @Autowired
     private ReviewRepository reviewRepository;
 
+    @Autowired
+    private MovieCache movieCache;
+
     @BeforeEach
     void resetDatabase() {
         reviewRepository.deleteAll();
         movieRepository.deleteAll();
+        // The data just changed behind the cache's back, so drop what earlier tests cached
+        movieCache.invalidateAll();
 
         Movie movie = new Movie();
         movie.setImdbId("tt0000001");
