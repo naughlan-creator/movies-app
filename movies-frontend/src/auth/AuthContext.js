@@ -1,70 +1,98 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { AuthProvider as OidcProvider, useAuth as useOidc } from 'react-oidc-context';
+import { WebStorageStateStore } from 'oidc-client-ts';
 import api, { setAccessToken } from '../api/axiosConfig';
 
-const TOKEN_KEY = 'movieGold.accessToken';
-const AuthContext = createContext(null);
-
-// Reading "exp" lets the UI discard an expired token early.
-// This is NOT verification: the payload is readable by anyone, and only the server can trust a token.
-const isExpired = (token) => {
-    try {
-        const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-        return payload.exp * 1000 <= Date.now();
-    } catch {
-        return true;
-    }
+// Users log in on Keycloak's own pages (Authorization Code flow + PKCE): this app never sees a password.
+// The OIDC library does the protocol work; this file adapts it to the small useAuth() API the components use.
+const oidcConfig = {
+    authority: process.env.REACT_APP_OIDC_AUTHORITY,
+    client_id: process.env.REACT_APP_OIDC_CLIENT_ID,
+    redirect_uri: `${window.location.origin}/`,
+    post_logout_redirect_uri: `${window.location.origin}/`,
+    scope: 'openid profile',
+    // Tokens stay in this tab and are cleared when it closes (the trade-offs are in README.md)
+    userStore: new WebStorageStateStore({ store: window.sessionStorage }),
+    // Uses the refresh token to fetch a new access token shortly before the current one expires
+    automaticSilentRenew: true,
+    // Keycloak returns with ?code=...&state=...; once exchanged for tokens, remove them from the address bar
+    onSigninCallback: () => window.history.replaceState({}, document.title, window.location.pathname),
 };
 
-export const AuthProvider = ({ children }) => {
+// Where to go after Keycloak sends the user back. Set only by our own code, never from a URL parameter
+// (taking it from the URL unchecked would be an open redirect).
+const RETURN_TO_KEY = 'movieGold.returnTo';
+const isInternalPath = (path) => typeof path === 'string' && path.startsWith('/') && !path.startsWith('//');
+
+const AuthContext = createContext(null);
+
+const AppAuthProvider = ({ children }) => {
+    const oidc = useOidc();
+    const navigate = useNavigate();
     const [user, setUser] = useState(null);
-    const [ready, setReady] = useState(false);
+    const [profileLoaded, setProfileLoaded] = useState(false);
+    const accessToken = oidc.user?.access_token;
 
-    const logout = useCallback(() => {
-        sessionStorage.removeItem(TOKEN_KEY);
-        setAccessToken(null);
-        setUser(null);
-    }, []);
-
-    const startSession = useCallback(async (token) => {
-        sessionStorage.setItem(TOKEN_KEY, token);
-        setAccessToken(token);
-        const response = await api.get('/api/v1/users/me');
-        setUser(response.data);
-    }, []);
-
-    // On page load, resume this tab's session if its token is still valid
+    // Keep axios' Authorization header in step with the current (possibly renewed) token,
+    // then ask the API who we are: the API's reading of the token is the one that counts
     useEffect(() => {
-        const saved = sessionStorage.getItem(TOKEN_KEY);
-        if (saved && !isExpired(saved)) {
-            startSession(saved).catch(logout).finally(() => setReady(true));
-        } else {
-            logout();
-            setReady(true);
+        setAccessToken(accessToken ?? null);
+        if (!accessToken) {
+            setUser(null);
+            setProfileLoaded(true);
+            return undefined;
         }
-    }, [startSession, logout]);
+        let cancelled = false;
+        setProfileLoaded(false);
+        api.get('/api/v1/users/me')
+            .then((response) => { if (!cancelled) setUser(response.data); })
+            .catch(() => { if (!cancelled) setUser(null); })
+            .finally(() => { if (!cancelled) setProfileLoaded(true); });
+        return () => { cancelled = true; };
+    }, [accessToken]);
 
-    // A request that was sent WITH a token and came back 401 means the token expired or was rejected
+    // Back from Keycloak: return to the page the user started from (e.g. a movie's reviews)
+    useEffect(() => {
+        if (!oidc.isAuthenticated) return;
+        const returnTo = sessionStorage.getItem(RETURN_TO_KEY);
+        if (returnTo) {
+            sessionStorage.removeItem(RETURN_TO_KEY);
+            if (isInternalPath(returnTo)) navigate(returnTo, { replace: true });
+        }
+    }, [oidc.isAuthenticated, navigate]);
+
+    // A request that carried a token and got 401 means the token was rejected: drop the local session
     useEffect(() => {
         const id = api.interceptors.response.use(
             (response) => response,
             (error) => {
                 if (error.response?.status === 401 && error.config?.headers?.Authorization) {
-                    logout();
+                    oidc.removeUser();
                 }
                 return Promise.reject(error);
             });
         return () => api.interceptors.response.eject(id);
-    }, [logout]);
+    }, [oidc]);
 
-    const login = async (username, password) => {
-        const response = await api.post('/api/v1/auth/token', { username, password });
-        await startSession(response.data.accessToken);
-    };
+    const login = useCallback((returnTo) => {
+        sessionStorage.setItem(RETURN_TO_KEY, returnTo ?? '/');
+        return oidc.signinRedirect();
+    }, [oidc]);
 
-    const register = async (username, password) => {
-        await api.post('/api/v1/users', { username, password });
-        await login(username, password);
-    };
+    const register = useCallback((returnTo) => {
+        sessionStorage.setItem(RETURN_TO_KEY, returnTo ?? '/');
+        // prompt=create asks Keycloak to show its sign-up form instead of the login form
+        return oidc.signinRedirect({ prompt: 'create' });
+    }, [oidc]);
+
+    const logout = useCallback(() => {
+        setAccessToken(null);
+        // Ends the Keycloak session as well (single sign-out), then comes back to the home page
+        return oidc.signoutRedirect();
+    }, [oidc]);
+
+    const ready = !oidc.isLoading && profileLoaded;
 
     return (
         <AuthContext.Provider value={{ user, ready, login, register, logout }}>
@@ -72,5 +100,11 @@ export const AuthProvider = ({ children }) => {
         </AuthContext.Provider>
     );
 };
+
+export const AuthProvider = ({ children }) => (
+    <OidcProvider {...oidcConfig}>
+        <AppAuthProvider>{children}</AppAuthProvider>
+    </OidcProvider>
+);
 
 export const useAuth = () => useContext(AuthContext);

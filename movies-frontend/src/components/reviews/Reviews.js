@@ -1,7 +1,7 @@
 import './Reviews.css';
 import {useEffect, useRef, useState} from 'react';
 import api from '../../api/axiosConfig';
-import {Link, useLocation, useParams} from 'react-router-dom';
+import {useLocation, useParams} from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import {Button, Container, Row, Col} from 'react-bootstrap';
 import ReviewForm from '../reviewForm/ReviewForm';
@@ -13,6 +13,8 @@ const Reviews = ({getMovieData,movie,reviews,setReviews, movieNotFound}) => {
     const revText = useRef();
     let params = useParams();
     const movieId = params.movieId;
+    const { user, login } = useAuth();
+    const location = useLocation();
 
     const [reviewError, setReviewError] = useState(null);
 
@@ -55,8 +57,9 @@ const Reviews = ({getMovieData,movie,reviews,setReviews, movieNotFound}) => {
     }
 
     // UX only: decides whether to SHOW the button. The server makes the real decision.
+    // Compares the stable Keycloak id, like the server does, never the (changeable) username.
     const canDelete = (review) =>
-        user && (user.username === review.author || user.roles?.includes('ADMIN'));
+        user && (user.id === review.authorId || user.roles?.includes('ADMIN'));
 
     const deleteReview = async (review) => {
         if (!window.confirm('Delete this review?')) return;
@@ -79,8 +82,6 @@ const Reviews = ({getMovieData,movie,reviews,setReviews, movieNotFound}) => {
 
     const cast = movie?.cast ?? [];
     const audienceReviews = movie?.audienceReviews ?? [];
-    const { user } = useAuth();
-    const location = useLocation();
     if (movieNotFound) {
         return <NotFound/>;
     }
@@ -149,14 +150,17 @@ const Reviews = ({getMovieData,movie,reviews,setReviews, movieNotFound}) => {
                     {user ? (
                         <ReviewForm handleSubmit={addReview} revText={revText} labelText = "Write a Review?" />
                     ) : (
-                        <p><Link to="/login" state={{ from: location.pathname }}>Log in</Link> to write a review.</p>
+                        <p>
+                            <Button variant="link" className="p-0 align-baseline" onClick={() => login(location.pathname)}>Log in</Button>
+                            {' '}to write a review.
+                        </p>
                     )}
                     {reviewError && <p className="text-danger mt-2 mb-0">{reviewError}</p>}
                     <hr />
                     {reviews.map((r) => (
                         <div key={r.id} className="app-review">
                             <div className="app-review-header">
-                                <strong>{r.author ?? 'Early reviewer'}</strong>
+                                <strong>{r.authorName ?? 'Early reviewer'}</strong>
                                 {r.createdAt && <span className="app-review-date">{new Date(r.createdAt).toLocaleDateString()}</span>}
                                 {canDelete(r) && (
                                     <Button variant="link" size="sm" className="text-danger p-0 ms-auto" onClick={() => deleteReview(r)}>

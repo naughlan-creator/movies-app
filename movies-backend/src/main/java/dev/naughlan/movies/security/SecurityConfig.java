@@ -24,7 +24,7 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
 
 @Configuration
 @EnableMethodSecurity
-@Import(JwtConfig.class)
+@Import(JwtDecoderConfig.class)
 public class SecurityConfig {
 
     @Bean
@@ -48,7 +48,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // "*" matches exactly one path segment; new sub-paths stay protected by default
                         .requestMatchers(HttpMethod.GET, "/api/v1/movies", "/api/v1/movies/*").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/users", "/api/v1/auth/token").permitAll()
+                        // Sign-up and login happen on Keycloak's pages, so the API has no public write endpoints
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs*", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated())
@@ -63,8 +63,9 @@ public class SecurityConfig {
         return http.build();
     }
 
-    // Reads our "roles" claim (["USER"]) into Spring authorities (ROLE_USER),
-    // so hasRole("ADMIN") works in step 2.4
+    // Keycloak puts realm roles in a flat "roles" claim (see the realm's protocol mapper);
+    // this turns ["USER", "ADMIN"] into Spring authorities ROLE_USER and ROLE_ADMIN.
+    // The principal name stays the default "sub" claim: the stable user id.
     private static JwtAuthenticationConverter jwtAuthenticationConverter() {
         JwtGrantedAuthoritiesConverter authorities = new JwtGrantedAuthoritiesConverter();
         authorities.setAuthoritiesClaimName("roles");

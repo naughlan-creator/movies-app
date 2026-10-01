@@ -8,6 +8,7 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.web.ErrorResponseException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -64,19 +65,10 @@ public class GlobalExceptionHandler {
         return problem;
     }
 
-    @ExceptionHandler(ResourceConflictException.class)
-    public ProblemDetail handleConflict(ResourceConflictException ex) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
-        problem.setTitle(ex.getTitle());
-        return problem;
-    }
-
-    @ExceptionHandler(InvalidRequestException.class)
-    public ProblemDetail handleInvalidRequest(InvalidRequestException ex) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "One or more fields are invalid");
-        problem.setTitle("Invalid request");
-        problem.setProperty("errors", Map.of(ex.getField(), ex.getMessage()));
-        return problem;
+    // ResponseStatusException and friends already carry a ProblemDetail; return it as-is
+    @ExceptionHandler(ErrorResponseException.class)
+    public ProblemDetail handleErrorResponse(ErrorResponseException ex) {
+        return ex.getBody();
     }
 
     @ExceptionHandler(AuthenticationException.class)

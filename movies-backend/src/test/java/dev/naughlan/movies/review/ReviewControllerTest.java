@@ -1,6 +1,7 @@
 package dev.naughlan.movies.review;
 
 import org.junit.jupiter.api.Test;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -43,7 +44,7 @@ class ReviewControllerTest {
                 .andExpect(jsonPath("$.errors.reviewBody").exists())
                 .andExpect(jsonPath("$.errors.imdbId").exists());
 
-        verify(reviewService, never()).createReview(anyString(), anyString(), anyString());
+        verify(reviewService, never()).createReview(anyString(), anyString(), any());
     }
 
     @Test
@@ -66,6 +67,6 @@ class ReviewControllerTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.title").value("Authentication required"));
 
-        verify(reviewService, never()).createReview(anyString(), anyString(), anyString());
+        verify(reviewService, never()).createReview(anyString(), anyString(), any());
     }
 }
