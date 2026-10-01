@@ -3,6 +3,7 @@ package dev.naughlan.movies;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
+import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.mongodb.MongoDBContainer;
 import org.testcontainers.utility.DockerImageName;
 
@@ -10,9 +11,18 @@ import org.testcontainers.utility.DockerImageName;
 @TestConfiguration(proxyBeanMethods = false)
 public class TestcontainersConfiguration {
 
+    // Transactions (used by the outbox) need a replica set. In Testcontainers 2.x that's opt-in
+    // (1.x always started one), hence withReplicaSet().
     @Bean
     @ServiceConnection
     MongoDBContainer mongoDbContainer() {
-        return new MongoDBContainer(DockerImageName.parse("mongo:8.0"));
+        return new MongoDBContainer(DockerImageName.parse("mongo:8.0")).withReplicaSet();
+    }
+
+    // Same image as docker-compose, in KRaft mode
+    @Bean
+    @ServiceConnection
+    KafkaContainer kafkaContainer() {
+        return new KafkaContainer(DockerImageName.parse("apache/kafka:4.3.1"));
     }
 }

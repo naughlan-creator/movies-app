@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
@@ -25,6 +26,7 @@ import org.springframework.stereotype.Component;
  * Mongock (or Flyway for SQL) to record which migrations have run.
  */
 @Component
+@Order(1)
 class ReviewMovieLinkMigration implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(ReviewMovieLinkMigration.class);

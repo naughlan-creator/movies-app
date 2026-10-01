@@ -16,7 +16,8 @@ public record MovieDetailResponse(
     String poster,
     List<String> backdrops,
     String trailerLink,
-    List<AudienceReview> audienceReviews
+    List<AudienceReview> audienceReviews,
+    long reviewCount
 ) {
     public static MovieDetailResponse from(Movie movie) {
         return new MovieDetailResponse(
@@ -31,6 +32,7 @@ public record MovieDetailResponse(
             movie.getPoster(),
             Objects.requireNonNullElse(movie.getBackdrops(), List.of()),
             movie.getTrailerLink(),
-            Objects.requireNonNullElse(movie.getAudienceReviews(), List.of()));
+            Objects.requireNonNullElse(movie.getAudienceReviews(), List.of()),
+            Objects.requireNonNullElse(movie.getReviewCount(), 0L));
     }
 }

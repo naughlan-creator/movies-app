@@ -14,7 +14,8 @@ public record MovieSummaryResponse(
     String poster,
     List<String> backdrops,
     String trailerLink,
-    Integer trendingRank
+    Integer trendingRank,
+    long reviewCount
 ) {
     public static MovieSummaryResponse from(Movie movie) {
         return new MovieSummaryResponse(
@@ -28,6 +29,7 @@ public record MovieSummaryResponse(
             movie.getPoster(),
             Objects.requireNonNullElse(movie.getBackdrops(), List.of()),
             movie.getTrailerLink(),
-            movie.getTrendingRank());
+            movie.getTrendingRank(),
+            Objects.requireNonNullElse(movie.getReviewCount(), 0L));
     }
 }

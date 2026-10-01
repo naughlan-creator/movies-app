@@ -8,9 +8,11 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import dev.naughlan.movies.movie.MovieNotFoundException;
 import dev.naughlan.movies.movie.MovieRepository;
+import dev.naughlan.movies.outbox.Outbox;
 import dev.naughlan.movies.security.CurrentUser;
 
 @Service
@@ -20,20 +22,26 @@ public class ReviewService {
 
     private final ReviewRepository reviewRepository;
     private final MovieRepository movieRepository;
+    private final Outbox outbox;
 
-    public ReviewService(ReviewRepository reviewRepository, MovieRepository movieRepository) {
+    public ReviewService(ReviewRepository reviewRepository, MovieRepository movieRepository, Outbox outbox) {
         this.reviewRepository = reviewRepository;
         this.movieRepository = movieRepository;
+        this.outbox = outbox;
     }
 
+    // The review and its event are written in one MongoDB transaction: both are saved, or neither is.
+    // Calling Kafka here instead would reintroduce the two-write problem (a saved review with no event,
+    // or an event for a review that was never saved). The OutboxRelay publishes the event afterwards.
+    @Transactional
     public Review createReview(String reviewBody, String imdbId, CurrentUser author) {
         if (!movieRepository.existsByImdbId(imdbId)) {
             throw new MovieNotFoundException(imdbId);
         }
-        // One write: the review carries its movie's id, so there is no second "attach to movie" step
-        // that could fail half way (the old design pushed the review into the movie afterwards)
-        return reviewRepository.insert(
+        Review review = reviewRepository.insert(
                 new Review(reviewBody.trim(), imdbId, author.id(), author.username(), Instant.now()));
+        outbox.record(ReviewEvents.TOPIC, imdbId, ReviewEvent.created(review));
+        return review;
     }
 
     public Page<Review> reviewsForMovie(String imdbId, int page, int size) {
@@ -43,6 +51,7 @@ public class ReviewService {
         return reviewRepository.findByImdbId(imdbId, PageRequest.of(page, size, NEWEST_FIRST));
     }
 
+    @Transactional
     public void deleteReview(String reviewId, CurrentUser user) {
         // A malformed id can't match anything, so it's a 404, not a 500
         if (!ObjectId.isValid(reviewId)) {
@@ -57,5 +66,6 @@ public class ReviewService {
             throw new AccessDeniedException("Only the review's author or an admin can delete it");
         }
         reviewRepository.delete(review);
+        outbox.record(ReviewEvents.TOPIC, review.getImdbId(), ReviewEvent.deleted(review));
     }
 }

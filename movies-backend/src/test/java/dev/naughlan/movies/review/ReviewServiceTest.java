@@ -4,6 +4,8 @@ import static dev.naughlan.movies.TestUsers.MOVIE_FAN_42;
 import static dev.naughlan.movies.TestUsers.MOVIE_FAN_43;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -19,13 +21,15 @@ import org.springframework.security.access.AccessDeniedException;
 
 import dev.naughlan.movies.movie.MovieNotFoundException;
 import dev.naughlan.movies.movie.MovieRepository;
+import dev.naughlan.movies.outbox.Outbox;
 import dev.naughlan.movies.security.CurrentUser;
 
 class ReviewServiceTest {
 
     private final ReviewRepository reviewRepository = mock(ReviewRepository.class);
     private final MovieRepository movieRepository = mock(MovieRepository.class);
-    private final ReviewService service = new ReviewService(reviewRepository, movieRepository);
+    private final Outbox outbox = mock(Outbox.class);
+    private final ReviewService service = new ReviewService(reviewRepository, movieRepository, outbox);
 
     private static Review reviewBy(CurrentUser author) {
         return new Review(new ObjectId(), "Some opinion", "tt0000001", author.id(), author.username(), Instant.now());
@@ -39,6 +43,25 @@ class ReviewServiceTest {
                 .isInstanceOf(MovieNotFoundException.class);
 
         verify(reviewRepository, never()).insert(any(Review.class));
+        verify(outbox, never()).record(any(), any(), any());
+    }
+
+    @Test
+    void creatingAReviewRecordsACreatedEventKeyedByMovie() {
+        when(movieRepository.existsByImdbId("tt0000001")).thenReturn(true);
+        when(reviewRepository.insert(any(Review.class))).thenAnswer(call -> {
+            Review saved = call.getArgument(0);
+            saved.setId(new ObjectId());
+            return saved;
+        });
+
+        service.createReview("  Great film  ", "tt0000001", MOVIE_FAN_43);
+
+        verify(outbox).record(eq(ReviewEvents.TOPIC), eq("tt0000001"), argThat(event ->
+                event instanceof ReviewEvent e
+                        && e.type() == ReviewEvent.Type.CREATED
+                        && e.body().equals("Great film")
+                        && e.authorId().equals(MOVIE_FAN_43.id())));
     }
 
     @Test
@@ -49,6 +72,7 @@ class ReviewServiceTest {
         assertThatThrownBy(() -> service.deleteReview(review.getId().toHexString(), MOVIE_FAN_42))
                 .isInstanceOf(AccessDeniedException.class);
         verify(reviewRepository, never()).delete(any(Review.class));
+        verify(outbox, never()).record(any(), any(), any());
     }
 
     @Test
@@ -71,6 +95,8 @@ class ReviewServiceTest {
         service.deleteReview(review.getId().toHexString(), MOVIE_FAN_43);
 
         verify(reviewRepository).delete(review);
+        verify(outbox).record(eq(ReviewEvents.TOPIC), eq("tt0000001"),
+                argThat(event -> event instanceof ReviewEvent e && e.type() == ReviewEvent.Type.DELETED));
     }
 
     @Test

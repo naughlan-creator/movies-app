@@ -37,4 +37,7 @@ public class Movie {
     private List<AudienceReview> audienceReviews;
     private Integer trendingRank; // 1 = most trending this week, null = not trending
     private Instant syncedAt;
+
+    // Maintained asynchronously from Kafka review events by review.ReviewCountProjector
+    private Long reviewCount;
 }

@@ -47,7 +47,11 @@ const Hero = ({movies}) => {
                                     <div className="movie-title">
                                         {movie.trendingRank && <span className="movie-trending-badge">#{movie.trendingRank} trending this week</span>}
                                         <h4>{movie.title}</h4>
-                                        <span className="movie-meta">{formatMeta(movie)}</span>
+                                        <span className="movie-meta">
+                                            {formatMeta(movie)}
+                                            {/* Kept up to date by the Kafka review-count consumer, so it can lag a write by a moment */}
+                                            {movie.reviewCount > 0 && ` · ${movie.reviewCount} review${movie.reviewCount === 1 ? '' : 's'}`}
+                                        </span>
                                     </div>
                                     <div className="movie-buttons-container">
                                         {movie.trailerLink ? (
