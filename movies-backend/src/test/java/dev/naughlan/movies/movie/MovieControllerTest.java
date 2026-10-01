@@ -15,6 +15,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import dev.naughlan.movies.common.JsonCache;
 import dev.naughlan.movies.security.SecurityConfig;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.time.Duration;
@@ -46,7 +47,7 @@ class MovieControllerTest {
     static class PassThroughCache {
         @Bean
         MovieCache movieCache() {
-            return new MovieCache(new JsonCache(mock(StringRedisTemplate.class), JsonMapper.builder().build(), false, Duration.ZERO));
+            return new MovieCache(new JsonCache(mock(StringRedisTemplate.class), JsonMapper.builder().build(), new SimpleMeterRegistry(), false, Duration.ZERO));
         }
     }
 

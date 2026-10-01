@@ -116,6 +116,15 @@
 			<artifactId>awaitility</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!-- Observability: health/probe endpoints, and metrics + traces exported over OTLP -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-opentelemetry</artifactId>
+		</dependency>
 		<!-- Read-through cache for movie responses -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

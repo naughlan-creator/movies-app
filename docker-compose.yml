@@ -69,6 +69,16 @@ services:
       # 6379 is inside a range Windows reserves, hence 16379
       - "16379:6379"
 
+  observability:
+    # Grafana's all-in-one OpenTelemetry backend for development: an OTLP collector plus
+    # Prometheus (metrics), Tempo (traces), Loki (logs) and Grafana to explore them.
+    image: grafana/otel-lgtm:0.34.0
+    ports:
+      - "13000:3000"   # Grafana UI (user admin / admin)
+      # 4317/4318 are inside a range Windows reserves, hence 14317/14318
+      - "14317:4317"   # OTLP over gRPC
+      - "14318:4318"   # OTLP over HTTP (what the backend uses)
+
   vault:
     image: hashicorp/vault:2.1.1
     # Dev mode: in-memory storage, already unsealed, a KV v2 engine at secret/. Everything is lost on

@@ -19,6 +19,8 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
 
 /**
@@ -37,10 +39,15 @@ class OutboxRelay {
 
     private final MongoTemplate mongoTemplate;
     private final KafkaTemplate<String, String> kafkaTemplate;
+    // A rising "failed" count with no "published" means Kafka is unreachable and events are piling up
+    private final Counter published;
+    private final Counter failed;
 
-    OutboxRelay(MongoTemplate mongoTemplate, KafkaTemplate<String, String> kafkaTemplate) {
+    OutboxRelay(MongoTemplate mongoTemplate, KafkaTemplate<String, String> kafkaTemplate, MeterRegistry meters) {
         this.mongoTemplate = mongoTemplate;
         this.kafkaTemplate = kafkaTemplate;
+        this.published = Counter.builder("app.outbox.events").tag("outcome", "published").register(meters);
+        this.failed = Counter.builder("app.outbox.events").tag("outcome", "failed").register(meters);
     }
 
     // Published events are deleted automatically after a week (a TTL index); they're only kept for debugging
@@ -64,11 +71,13 @@ class OutboxRelay {
                 // Wait for Kafka's acknowledgement before marking the event as published
                 kafkaTemplate.send(event.topic(), event.key(), event.payload()).get(10, TimeUnit.SECONDS);
                 mark(event, new Update().set("publishedAt", Instant.now()));
+                published.increment();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return;
             } catch (ExecutionException | TimeoutException | RuntimeException e) {
                 mark(event, new Update().inc("attempts", 1));
+                failed.increment();
                 log.warn("Could not publish outbox event {} to {}; retrying on the next poll: {}",
                         event.id(), event.topic(), e.getMessage());
                 // Stop here so later events don't overtake this one; ordering matters to consumers

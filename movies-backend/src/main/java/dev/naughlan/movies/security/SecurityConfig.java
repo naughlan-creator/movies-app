@@ -62,6 +62,10 @@ public class SecurityConfig {
                         // Sign-up and login happen on Keycloak's pages, so the API has no public write endpoints
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs*", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/error").permitAll()
+                        // Load balancers and Kubernetes probe health without credentials; it reveals only UP/DOWN.
+                        // Everything else under /actuator (metrics, details) is for admins.
+                        .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
+                        .requestMatchers("/actuator/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))

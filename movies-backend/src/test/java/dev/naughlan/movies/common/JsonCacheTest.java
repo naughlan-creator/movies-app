@@ -16,6 +16,7 @@ import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import tools.jackson.databind.json.JsonMapper;
 
 class JsonCacheTest {
@@ -26,12 +27,17 @@ class JsonCacheTest {
     @SuppressWarnings("unchecked")
     private final ValueOperations<String, String> values = mock(ValueOperations.class);
     private final StringRedisTemplate redis = mock(StringRedisTemplate.class);
+    private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
     private final JsonCache cache;
     private final AtomicInteger loads = new AtomicInteger();
 
     JsonCacheTest() {
         when(redis.opsForValue()).thenReturn(values);
-        cache = new JsonCache(redis, JsonMapper.builder().build(), true, Duration.ofMinutes(10));
+        cache = new JsonCache(redis, JsonMapper.builder().build(), meters, true, Duration.ofMinutes(10));
+    }
+
+    private double count(String result) {
+        return meters.get("app.cache.requests").tag("result", result).counter().count();
     }
 
     private Greeting load() {
@@ -45,6 +51,7 @@ class JsonCacheTest {
 
         assertThat(cache.getOrLoad("k", Greeting.class, this::load).text()).isEqualTo("from the cache");
         assertThat(loads).hasValue(0);
+        assertThat(count("hit")).isEqualTo(1);
     }
 
     @Test
@@ -52,6 +59,7 @@ class JsonCacheTest {
         assertThat(cache.getOrLoad("k", Greeting.class, this::load).text()).isEqualTo("from the database");
 
         verify(values).set(eq("k"), eq("{\"text\":\"from the database\"}"), eq(Duration.ofMinutes(10)));
+        assertThat(count("miss")).isEqualTo(1);
     }
 
     @Test
@@ -60,6 +68,7 @@ class JsonCacheTest {
 
         assertThat(cache.getOrLoad("k", Greeting.class, this::load).text()).isEqualTo("from the database");
         assertThat(loads).hasValue(1);
+        assertThat(count("error")).isEqualTo(1);
     }
 
     @Test

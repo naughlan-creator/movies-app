@@ -11,6 +11,8 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
@@ -32,14 +34,28 @@ public class JsonCache {
     private final JsonMapper jsonMapper;
     private final boolean enabled;
     private final Duration ttl;
+    // Hit ratio = hits / (hits + misses): the number that tells you whether the cache earns its keep
+    private final Counter hits;
+    private final Counter misses;
+    private final Counter errors;
 
-    public JsonCache(StringRedisTemplate redis, JsonMapper jsonMapper,
+    public JsonCache(StringRedisTemplate redis, JsonMapper jsonMapper, MeterRegistry meters,
                      @Value("${app.cache.enabled}") boolean enabled,
                      @Value("${app.cache.ttl}") Duration ttl) {
         this.redis = redis;
         this.jsonMapper = jsonMapper;
         this.enabled = enabled;
         this.ttl = ttl;
+        this.hits = cacheCounter(meters, "hit");
+        this.misses = cacheCounter(meters, "miss");
+        this.errors = cacheCounter(meters, "error");
+    }
+
+    private static Counter cacheCounter(MeterRegistry meters, String result) {
+        return Counter.builder("app.cache.requests")
+                .description("Cache lookups by outcome")
+                .tag("result", result)
+                .register(meters);
     }
 
     public <T> T getOrLoad(String key, Class<T> type, Supplier<T> loader) {
@@ -86,12 +102,17 @@ public class JsonCache {
         try {
             String cached = redis.opsForValue().get(key);
             if (cached != null) {
-                return parse.apply(cached);
+                T value = parse.apply(cached);
+                hits.increment();
+                return value;
             }
+            misses.increment();
         } catch (DataAccessException e) {
+            errors.increment();
             log.debug("Cache unavailable, reading {} from the source: {}", key, e.getMessage());
             return loader.get();
         } catch (JacksonException e) {
+            misses.increment();
             // e.g. the response shape changed since this entry was written
             log.debug("Discarding unreadable cache entry {}: {}", key, e.getMessage());
         }
