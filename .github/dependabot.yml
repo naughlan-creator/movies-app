@@ -23,3 +23,11 @@ updates:
     directory: /
     schedule:
       interval: weekly
+
+  # Base images in the Dockerfiles (JDK/JRE, Node, Caddy)
+  - package-ecosystem: docker
+    directories:
+      - /movies-backend
+      - /movies-frontend
+    schedule:
+      interval: weekly
