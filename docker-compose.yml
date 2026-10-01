@@ -41,6 +41,23 @@ services:
       timeout: 10s
       retries: 20
 
+  caddy:
+    image: caddy:2.11.4-alpine
+    # Opt-in: docker compose --profile tls up -d caddy
+    profiles: ["tls"]
+    ports:
+      - "19443:443"
+    environment:
+      # Where the API runs; the backend runs on the host, outside Docker
+      BACKEND_UPSTREAM: ${BACKEND_UPSTREAM:-host.docker.internal:18080}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Keeps the local CA and certificates across restarts, so the root you trusted stays valid
+      - caddy-data:/data
+
 volumes:
   keycloak-data:
   mongo-data:
+  caddy-data:

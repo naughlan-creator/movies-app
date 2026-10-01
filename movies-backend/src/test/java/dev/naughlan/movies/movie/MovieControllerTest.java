@@ -19,6 +19,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -62,5 +63,16 @@ class MovieControllerTest {
         mockMvc.perform(get("/api/v1/movies").param("page", "abc"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors.page").exists());
+    }
+
+    @Test
+    void sendsHstsOnlyOverHttps() throws Exception {
+        when(movieService.allMovies(0, 10)).thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+
+        // secure(true) is what the request looks like once Caddy's X-Forwarded-Proto: https is trusted
+        mockMvc.perform(get("/api/v1/movies").secure(true))
+                .andExpect(header().string("Strict-Transport-Security", "max-age=0"));
+        mockMvc.perform(get("/api/v1/movies"))
+                .andExpect(header().doesNotExist("Strict-Transport-Security"));
     }
 }

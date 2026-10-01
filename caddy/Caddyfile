@@ -1,0 +1,23 @@
+# TLS-terminating reverse proxy in front of the API (docker compose --profile tls).
+# Browser --HTTPS--> Caddy (container :443, host :19443) --HTTP--> Spring Boot on the host.
+
+{
+	# Sign certificates with Caddy's own local certificate authority:
+	# public CAs like Let's Encrypt can't issue certificates for "localhost".
+	# In production, drop this line and use a real domain; Caddy then obtains and renews
+	# Let's Encrypt certificates automatically.
+	local_certs
+}
+
+https://localhost {
+	encode zstd gzip
+
+	# Caddy adds X-Forwarded-For / -Proto / -Host, so the API knows the original
+	# client IP and that the request arrived over HTTPS.
+	reverse_proxy {$BACKEND_UPSTREAM}
+
+	header {
+		# Don't advertise which server software is answering
+		-Server
+	}
+}

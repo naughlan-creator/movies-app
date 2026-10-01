@@ -34,7 +34,8 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             @Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver,
-            RateLimitProperties rateLimits) throws Exception {
+            RateLimitProperties rateLimits,
+            @Value("${app.security.hsts-max-age-seconds}") long hstsMaxAgeSeconds) throws Exception {
 
         // Filters run before @RestControllerAdvice can see anything, so hand security
         // errors to it explicitly: 401/403 then use the same ProblemDetail format as everything else
@@ -49,6 +50,12 @@ public class SecurityConfig {
                 // Stateless API with credentials in a header, not a cookie: nothing for CSRF to abuse
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                // HSTS is only sent on HTTPS requests (i.e. via the TLS proxy). Browsers remember it per host
+                // and refuse plain HTTP to that host afterwards, so localhost uses 0 ("remember nothing")
+                // and production sets a year.
+                .headers(headers -> headers.httpStrictTransportSecurity(hsts -> hsts
+                        .maxAgeInSeconds(hstsMaxAgeSeconds)
+                        .includeSubDomains(false)))
                 .authorizeHttpRequests(auth -> auth
                         // "*" matches exactly one path segment; new sub-paths stay protected by default
                         .requestMatchers(HttpMethod.GET, "/api/v1/movies", "/api/v1/movies/*").permitAll()
