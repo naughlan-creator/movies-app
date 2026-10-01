@@ -49,6 +49,11 @@ const Reviews = ({getMovieData,movie,reviews,setReviews, movieNotFound}) => {
                 setReviewError("Your session expired. Log in again to write a review.");
             } else if (err.response?.status === 400 && problem?.errors) {
                 setReviewError(Object.values(problem.errors).join(" "));
+            } else if (err.response?.status === 429) {
+                const wait = Number(err.response.headers['retry-after']);
+                setReviewError(wait > 0
+                    ? `You're posting too fast. Try again in ${wait} second${wait === 1 ? '' : 's'}.`
+                    : "You're posting too fast. Try again in a moment.");
             } else {
                 setReviewError("Couldn't save your review. Please try again.");
                 console.error(err);

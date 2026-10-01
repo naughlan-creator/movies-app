@@ -65,6 +65,16 @@ public class GlobalExceptionHandler {
         return problem;
     }
 
+    // The Retry-After header is set by RateLimitFilter before this runs
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ProblemDetail handleRateLimited(RateLimitExceededException ex) {
+        long seconds = ex.getRetryAfterSeconds();
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.TOO_MANY_REQUESTS,
+                "Too many requests. Try again in " + seconds + (seconds == 1 ? " second." : " seconds."));
+        problem.setTitle("Rate limit exceeded");
+        return problem;
+    }
+
     // ResponseStatusException and friends already carry a ProblemDetail; return it as-is
     @ExceptionHandler(ErrorResponseException.class)
     public ProblemDetail handleErrorResponse(ErrorResponseException ex) {

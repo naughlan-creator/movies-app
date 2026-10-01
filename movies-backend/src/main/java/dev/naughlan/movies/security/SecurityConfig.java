@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
@@ -15,6 +16,7 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
@@ -24,13 +26,15 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
 
 @Configuration
 @EnableMethodSecurity
+@EnableConfigurationProperties(RateLimitProperties.class)
 @Import(JwtDecoderConfig.class)
 public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
-            @Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver) throws Exception {
+            @Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver,
+            RateLimitProperties rateLimits) throws Exception {
 
         // Filters run before @RestControllerAdvice can see anything, so hand security
         // errors to it explicitly: 401/403 then use the same ProblemDetail format as everything else
@@ -60,6 +64,13 @@ public class SecurityConfig {
                         .accessDeniedHandler((request, response, ex) ->
                                 exceptionResolver.resolveException(request, response, null, ex)));
 
+        if (rateLimits.enabled()) {
+            // After the bearer token is read, so authenticated callers are limited per user rather than per IP.
+            // Created here rather than as a @Bean: a Filter bean would also be registered with the servlet
+            // container and run twice.
+            http.addFilterAfter(new RateLimitFilter(rateLimits, exceptionResolver), BearerTokenAuthenticationFilter.class);
+        }
+
         return http.build();
     }
 
@@ -83,6 +94,8 @@ public class SecurityConfig {
         config.setAllowedOrigins(allowedOrigins);
         config.setAllowedMethods(List.of("GET", "POST", "DELETE"));
         config.setAllowedHeaders(List.of("Content-Type", "Authorization"));
+        // Cross-origin JavaScript can only read response headers that are explicitly exposed
+        config.setExposedHeaders(List.of("Retry-After", "X-RateLimit-Remaining"));
         config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
