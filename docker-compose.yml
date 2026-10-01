@@ -49,11 +49,14 @@ services:
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
-      # The address clients are told to use; the backend runs on the host, so localhost
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      # Two client listeners, because clients connect to whatever address the broker advertises:
+      #  - PLAINTEXT (9092): for apps on the host, e.g. the backend run with mvnw -> localhost:9092
+      #  - DOCKER (29092): for containers on the compose network, e.g. the "backend" service -> kafka:29092
+      KAFKA_LISTENERS: PLAINTEXT://:9092,DOCKER://:29092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,DOCKER://kafka:29092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,DOCKER:PLAINTEXT
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
       # One broker, so internal topics can only have one copy
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
@@ -109,6 +112,54 @@ services:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       # Keeps the local CA and certificates across restarts, so the root you trusted stays valid
       - caddy-data:/data
+
+  # ---- The apps themselves, as containers (opt-in: docker compose --profile app up -d --build) ----
+  # For day-to-day coding, run them on the host instead (mvnw spring-boot:run, npm start).
+
+  backend:
+    profiles: ["app"]
+    build: ./movies-backend
+    depends_on:
+      mongo:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      redis:
+        condition: service_started
+      keycloak:
+        condition: service_started
+    environment:
+      SERVER_PORT: "8080"
+      # Inside the compose network, services are reached by name, not localhost
+      MONGO_URI: mongodb://mongo:27017/movies?directConnection=true
+      MONGO_DATABASE: movies
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      # The issuer must match the tokens' "iss", which is the URL the BROWSER uses for Keycloak.
+      # The keys can be fetched over the internal network.
+      OIDC_ISSUER_URI: http://localhost:18180/realms/movie-gold
+      OIDC_JWK_SET_URI: http://keycloak:8080/realms/movie-gold/protocol/openid-connect/certs
+      OTLP_ENDPOINT: http://observability:4318
+      CORS_ALLOWED_ORIGINS: http://localhost:13080,http://localhost:3000
+      # Optional: add TMDB_API_TOKEN to the root .env to sync trending movies in this mode
+      TMDB_API_TOKEN: ${TMDB_API_TOKEN:-}
+    ports:
+      - "18085:8080"
+
+  frontend:
+    profiles: ["app"]
+    build:
+      context: ./movies-frontend
+      args:
+        # Baked into the JavaScript at build time: the URLs the browser will call
+        REACT_APP_API_BASE_URL: http://localhost:18085
+        REACT_APP_OIDC_AUTHORITY: http://localhost:18180/realms/movie-gold
+        REACT_APP_OIDC_CLIENT_ID: movies-frontend
+    depends_on:
+      - backend
+    ports:
+      - "13080:80"
 
 volumes:
   keycloak-data:
