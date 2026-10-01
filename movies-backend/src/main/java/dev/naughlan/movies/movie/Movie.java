@@ -6,9 +6,7 @@ import java.util.List;
 import org.bson.types.ObjectId;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
-import org.springframework.data.mongodb.core.mapping.DocumentReference;
 
-import dev.naughlan.movies.review.Review;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -27,8 +25,8 @@ public class Movie {
     private String poster;
     private List<String> genres;
     private List<String> backdrops;
-    @DocumentReference // only puts ids and leaves data in its class
-    private List<Review> reviewIds;
+    // Reviews are no longer listed here: each review stores its movie's imdbId instead
+    // (see review.ReviewMovieLinkMigration), so a movie never has to know about reviews.
 
     // Filled in from TMDB by TrendingMoviesSync
     private Integer tmdbId;

@@ -6,8 +6,9 @@ import org.springframework.context.annotation.Bean;
 import org.testcontainers.mongodb.MongoDBContainer;
 import org.testcontainers.utility.DockerImageName;
 
+// Public so integration tests in feature packages (e.g. review) can import it
 @TestConfiguration(proxyBeanMethods = false)
-class TestcontainersConfiguration {
+public class TestcontainersConfiguration {
 
     @Bean
     @ServiceConnection

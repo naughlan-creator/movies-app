@@ -1,4 +1,4 @@
-package dev.naughlan.movies.common;
+package dev.naughlan.movies.security;
 
 // 429 Too Many Requests
 public class RateLimitExceededException extends RuntimeException {

@@ -1,5 +1,5 @@
 import './Reviews.css';
-import {useEffect, useRef, useState} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import api from '../../api/axiosConfig';
 import {useLocation, useParams} from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
@@ -8,7 +8,9 @@ import ReviewForm from '../reviewForm/ReviewForm';
 import { formatMeta } from '../../utils/movieFormat';
 import NotFound from '../notFound/NotFound';
 
-const Reviews = ({getMovieData,movie,reviews,setReviews, movieNotFound}) => {
+const REVIEWS_PER_PAGE = 10;
+
+const Reviews = ({getMovieData, movie, movieNotFound}) => {
 
     const revText = useRef();
     let params = useParams();
@@ -17,10 +19,33 @@ const Reviews = ({getMovieData,movie,reviews,setReviews, movieNotFound}) => {
     const location = useLocation();
 
     const [reviewError, setReviewError] = useState(null);
+    // Reviews are paged by the API (newest first) and loaded separately from the movie
+    const [reviews, setReviews] = useState([]);
+    const [reviewPage, setReviewPage] = useState({ page: 0, totalPages: 0, totalItems: 0 });
+
+    const loadReviews = useCallback(async (page) => {
+        try {
+            const response = await api.get(`/api/v1/movies/${movieId}/reviews`,
+                { params: { page, size: REVIEWS_PER_PAGE } });
+            const { items, totalPages, totalItems } = response.data;
+            // Offset pages shift when reviews are added meanwhile, so skip any we already show
+            setReviews((shown) => {
+                if (page === 0) return items;
+                const seen = new Set(shown.map((r) => r.id));
+                return [...shown, ...items.filter((r) => !seen.has(r.id))];
+            });
+            setReviewPage({ page, totalPages, totalItems });
+        } catch (err) {
+            // A 404 means the movie doesn't exist; the movie request already shows "not found"
+            if (err.response?.status !== 404) console.error(err);
+        }
+    }, [movieId]);
 
     useEffect(()=>{
         getMovieData(movieId);
-    },[movieId])
+        setReviews([]);
+        loadReviews(0);
+    },[movieId, loadReviews])
 
     const addReview = async (e) =>{
         e.preventDefault();
@@ -38,7 +63,9 @@ const Reviews = ({getMovieData,movie,reviews,setReviews, movieNotFound}) => {
         {
             const response = await api.post("/api/v1/reviews",{reviewBody:rev.value,imdbId:movieId});
 
-            setReviews([...reviews, response.data]);
+            // Newest first, like the API
+            setReviews((shown) => [response.data, ...shown]);
+            setReviewPage((p) => ({ ...p, totalItems: p.totalItems + 1 }));
 
             rev.value = "";
         }
@@ -66,18 +93,23 @@ const Reviews = ({getMovieData,movie,reviews,setReviews, movieNotFound}) => {
     const canDelete = (review) =>
         user && (user.id === review.authorId || user.roles?.includes('ADMIN'));
 
+    const removeFromList = (review) => {
+        setReviews((shown) => shown.filter((r) => r.id !== review.id));
+        setReviewPage((p) => ({ ...p, totalItems: Math.max(0, p.totalItems - 1) }));
+    };
+
     const deleteReview = async (review) => {
         if (!window.confirm('Delete this review?')) return;
         setReviewError(null);
         try {
             await api.delete(`/api/v1/reviews/${review.id}`);
-            setReviews(reviews.filter((r) => r.id !== review.id));
+            removeFromList(review);
         } catch (err) {
             if (err.response?.status === 403) {
                 setReviewError("You can only delete your own reviews.");
             } else if (err.response?.status === 404) {
                 // Already gone (e.g. deleted in another tab): just drop it from the list
-                setReviews(reviews.filter((r) => r.id !== review.id));
+                removeFromList(review);
             } else {
                 setReviewError("Couldn't delete the review. Please try again.");
                 console.error(err);
@@ -151,7 +183,7 @@ const Reviews = ({getMovieData,movie,reviews,setReviews, movieNotFound}) => {
                 </section>
 
                 <section className="reviews-section">
-                    <h5>Your reviews</h5>
+                    <h5>Your reviews{reviewPage.totalItems > 0 && ` (${reviewPage.totalItems})`}</h5>
                     {user ? (
                         <ReviewForm handleSubmit={addReview} revText={revText} labelText = "Write a Review?" />
                     ) : (
@@ -177,6 +209,11 @@ const Reviews = ({getMovieData,movie,reviews,setReviews, movieNotFound}) => {
                             <hr />
                         </div>
                     ))}
+                    {reviewPage.page + 1 < reviewPage.totalPages && (
+                        <Button variant="outline-info" size="sm" onClick={() => loadReviews(reviewPage.page + 1)}>
+                            Load more reviews
+                        </Button>
+                    )}
                 </section>
             </Col>
         </Row>

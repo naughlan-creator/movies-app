@@ -3,9 +3,7 @@ package dev.naughlan.movies.movie;
 import java.util.List;
 import java.util.Objects;
 
-import dev.naughlan.movies.review.Review;
-import dev.naughlan.movies.review.ReviewResponse;
-
+// Reviews written in this app are paged separately: GET /api/v1/movies/{imdbId}/reviews
 public record MovieDetailResponse(
     String imdbId,
     String title,
@@ -18,12 +16,9 @@ public record MovieDetailResponse(
     String poster,
     List<String> backdrops,
     String trailerLink,
-    List<AudienceReview> audienceReviews,
-    List<ReviewResponse> reviews
+    List<AudienceReview> audienceReviews
 ) {
     public static MovieDetailResponse from(Movie movie) {
-        List<Review> reviews = Objects.requireNonNullElse(movie.getReviewIds(), List.of());
-
         return new MovieDetailResponse(
             movie.getImdbId(),
             movie.getTitle(),
@@ -36,7 +31,6 @@ public record MovieDetailResponse(
             movie.getPoster(),
             Objects.requireNonNullElse(movie.getBackdrops(), List.of()),
             movie.getTrailerLink(),
-            Objects.requireNonNullElse(movie.getAudienceReviews(), List.of()),
-            reviews.stream().map(ReviewResponse::from).toList());
+            Objects.requireNonNullElse(movie.getAudienceReviews(), List.of()));
     }
 }

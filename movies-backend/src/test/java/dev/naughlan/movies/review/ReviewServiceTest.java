@@ -15,7 +15,6 @@ import java.util.Set;
 
 import org.bson.types.ObjectId;
 import org.junit.jupiter.api.Test;
-import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.security.access.AccessDeniedException;
 
 import dev.naughlan.movies.movie.MovieNotFoundException;
@@ -26,11 +25,10 @@ class ReviewServiceTest {
 
     private final ReviewRepository reviewRepository = mock(ReviewRepository.class);
     private final MovieRepository movieRepository = mock(MovieRepository.class);
-    private final MongoTemplate mongoTemplate = mock(MongoTemplate.class);
-    private final ReviewService service = new ReviewService(reviewRepository, movieRepository, mongoTemplate);
+    private final ReviewService service = new ReviewService(reviewRepository, movieRepository);
 
     private static Review reviewBy(CurrentUser author) {
-        return new Review(new ObjectId(), "Some opinion", author.id(), author.username(), Instant.now());
+        return new Review(new ObjectId(), "Some opinion", "tt0000001", author.id(), author.username(), Instant.now());
     }
 
     @Test
@@ -77,7 +75,7 @@ class ReviewServiceTest {
 
     @Test
     void legacyReviewsWithoutAnAuthorIdCanOnlyBeDeletedByAdmins() {
-        Review legacy = new Review(new ObjectId(), "Written before accounts existed", null, "movie_fan", null);
+        Review legacy = new Review(new ObjectId(), "Written before accounts existed", "tt0000001", null, "movie_fan", null);
         when(reviewRepository.findById(legacy.getId())).thenReturn(Optional.of(legacy));
 
         assertThatThrownBy(() -> service.deleteReview(legacy.getId().toHexString(), MOVIE_FAN_42))

@@ -19,6 +19,8 @@ public class Review {
     @Id
     private ObjectId id;
     private String body;
+    // The movie this review is about. The review points at the movie; the movie doesn't list its reviews.
+    private String imdbId;
     // The author's stable Keycloak id ("sub"). Ownership checks use this, never the name.
     // Null for reviews written before Keycloak: only admins can delete those.
     private String authorId;
@@ -28,8 +30,9 @@ public class Review {
     private String authorName;
     private Instant createdAt;
 
-    public Review(String body, String authorId, String authorName, Instant createdAt) {
+    public Review(String body, String imdbId, String authorId, String authorName, Instant createdAt) {
         this.body = body;
+        this.imdbId = imdbId;
         this.authorId = authorId;
         this.authorName = authorName;
         this.createdAt = createdAt;

@@ -1,31 +1,19 @@
 package dev.naughlan.movies.movie;
 
-import static dev.naughlan.movies.TestUsers.MOVIE_FAN_43_ID;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.time.Instant;
-import java.util.List;
-
-import org.bson.types.ObjectId;
 import org.junit.jupiter.api.Test;
-
-import dev.naughlan.movies.review.Review;
-import dev.naughlan.movies.review.ReviewResponse;
 
 class MovieDetailResponseTest {
     @Test
-    void exposesReviewsWithStringIdsAndNeverReturnsNullLists() {
-        ObjectId reviewId = new ObjectId();
+    void neverReturnsNullLists() {
         Movie movie = new Movie();
         movie.setImdbId("tt0000001");
-        Instant written = Instant.parse("2026-09-30T10:00:00Z");
-        movie.setReviewIds(List.of(new Review(reviewId, "Great film", MOVIE_FAN_43_ID, "movie_fan_43", written)));
         // cast, genres, backdrops and audienceReviews are left null on purpose
 
         MovieDetailResponse response = MovieDetailResponse.from(movie);
 
-        assertThat(response.reviews()).containsExactly(
-                new ReviewResponse(reviewId.toHexString(), "Great film", MOVIE_FAN_43_ID, "movie_fan_43", written));
+        assertThat(response.imdbId()).isEqualTo("tt0000001");
         assertThat(response.cast()).isEmpty();
         assertThat(response.genres()).isEmpty();
         assertThat(response.backdrops()).isEmpty();

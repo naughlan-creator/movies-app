@@ -19,7 +19,7 @@ import dev.naughlan.movies.movie.Movie;
 
 /**
  * On every startup, replaces the "trending this week" list with fresh data from TMDB.
- * Reviews written in this app (reviewIds) are never touched.
+ * Only TMDB fields are written; reviews live in their own collection and are never touched.
  */
 @Component
 public class TrendingMoviesSync {
@@ -83,7 +83,7 @@ public class TrendingMoviesSync {
                 Movie.class);
 
         // 3. Upsert = update the movie if its imdbId exists, insert it otherwise.
-        //    Only TMDB fields are set, so reviewIds (reviews written in this app) survive.
+        //    Only TMDB fields are set, so anything else stored on the movie survives.
         for (Movie movie : trending) {
             mongoTemplate.upsert(
                     Query.query(Criteria.where("imdbId").is(movie.getImdbId())),

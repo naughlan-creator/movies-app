@@ -3,44 +3,44 @@ package dev.naughlan.movies.review;
 import java.time.Instant;
 
 import org.bson.types.ObjectId;
-import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.data.mongodb.core.query.Criteria;
-import org.springframework.data.mongodb.core.query.Query;
-import org.springframework.data.mongodb.core.query.Update;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
-import dev.naughlan.movies.movie.Movie;
 import dev.naughlan.movies.movie.MovieNotFoundException;
 import dev.naughlan.movies.movie.MovieRepository;
 import dev.naughlan.movies.security.CurrentUser;
 
 @Service
 public class ReviewService {
+    // Newest first; _id breaks ties between reviews written in the same millisecond, so pages never overlap
+    private static final Sort NEWEST_FIRST = Sort.by(Sort.Direction.DESC, "createdAt", "id");
+
     private final ReviewRepository reviewRepository;
     private final MovieRepository movieRepository;
-    private final MongoTemplate mongoTemplate;
 
-    public ReviewService(ReviewRepository reviewRepository, MovieRepository movieRepository, MongoTemplate mongoTemplate) {
+    public ReviewService(ReviewRepository reviewRepository, MovieRepository movieRepository) {
         this.reviewRepository = reviewRepository;
         this.movieRepository = movieRepository;
-        this.mongoTemplate = mongoTemplate;
     }
 
     public Review createReview(String reviewBody, String imdbId, CurrentUser author) {
-        // Check before inserting: the old code saved the review first, leaving orphans when the movie didn't exist
         if (!movieRepository.existsByImdbId(imdbId)) {
             throw new MovieNotFoundException(imdbId);
         }
-        Review review = reviewRepository.insert(
-                new Review(reviewBody.trim(), author.id(), author.username(), Instant.now()));
+        // One write: the review carries its movie's id, so there is no second "attach to movie" step
+        // that could fail half way (the old design pushed the review into the movie afterwards)
+        return reviewRepository.insert(
+                new Review(reviewBody.trim(), imdbId, author.id(), author.username(), Instant.now()));
+    }
 
-        mongoTemplate.update(Movie.class)
-                .matching(Criteria.where("imdbId").is(imdbId))
-                .apply(new Update().push("reviewIds").value(review))
-                .first();
-
-        return review;
+    public Page<Review> reviewsForMovie(String imdbId, int page, int size) {
+        if (!movieRepository.existsByImdbId(imdbId)) {
+            throw new MovieNotFoundException(imdbId);
+        }
+        return reviewRepository.findByImdbId(imdbId, PageRequest.of(page, size, NEWEST_FIRST));
     }
 
     public void deleteReview(String reviewId, CurrentUser user) {
@@ -56,13 +56,6 @@ public class ReviewService {
         if (!user.isAdmin() && !user.id().equals(review.getAuthorId())) {
             throw new AccessDeniedException("Only the review's author or an admin can delete it");
         }
-
-        // Unlink it from its movie first, then delete it. If we crash in between,
-        // we're left with an unused review, not a movie pointing at a review that no longer exists.
-        mongoTemplate.updateMulti(
-                Query.query(Criteria.where("reviewIds").is(review.getId())),
-                new Update().pull("reviewIds", review.getId()),
-                Movie.class);
         reviewRepository.delete(review);
     }
 }

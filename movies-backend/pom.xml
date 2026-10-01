@@ -101,6 +101,13 @@
 			<artifactId>spring-boot-starter-security-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!-- Architecture rules as tests (e.g. no cycles between feature packages) -->
+		<dependency>
+			<groupId>com.tngtech.archunit</groupId>
+			<artifactId>archunit-junit5</artifactId>
+			<version>1.5.1</version>
+			<scope>test</scope>
+		</dependency>
 		<!-- Loads secrets from HashiCorp Vault at startup (opt-in with VAULT_ENABLED=true) -->
 		<dependency>
 			<groupId>org.springframework.cloud</groupId>

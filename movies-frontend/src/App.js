@@ -13,7 +13,6 @@ function App() {
 
   const [movies, setMovies] = useState();
   const [movie, setMovie] = useState();
-  const [reviews, setReviews] = useState([]);
   const [movieNotFound, setMovieNotFound] = useState(false);
 
   const getMovies = async () =>{
@@ -36,7 +35,6 @@ function App() {
      
     // Clear the previous movie so its details don't flash while the new one loads
     setMovie(undefined);
-    setReviews([]);
     setMovieNotFound(false);
 
     try
@@ -46,8 +44,6 @@ function App() {
         const singleMovie = response.data;
 
         setMovie(singleMovie);
-
-        setReviews(singleMovie.reviews);
         
 
     } 
@@ -73,7 +69,7 @@ function App() {
           <Route path="/" element={<Layout/>}>
             <Route path="/" element={<Home movies={movies} />} ></Route>
             <Route path="/Trailer/:ytTrailerId" element={<Trailer/>}></Route>
-            <Route path="/Reviews/:movieId" element ={<Reviews getMovieData = {getMovieData} movie={movie} reviews ={reviews} setReviews = {setReviews} movieNotFound={movieNotFound} />}></Route>
+            <Route path="/Reviews/:movieId" element ={<Reviews getMovieData = {getMovieData} movie={movie} movieNotFound={movieNotFound} />}></Route>
             <Route path="*" element = {<NotFound/>}></Route>
           </Route>
       </Routes>

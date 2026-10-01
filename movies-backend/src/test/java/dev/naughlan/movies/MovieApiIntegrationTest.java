@@ -77,11 +77,11 @@ class MovieApiIntegrationTest {
                 .andExpect(jsonPath("$.authorName").value("movie_fan_43"))
                 .andExpect(jsonPath("$.createdAt").isNotEmpty());
 
-        mockMvc.perform(get("/api/v1/movies/tt0000001"))
+        mockMvc.perform(get("/api/v1/movies/tt0000001/reviews"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.reviews.length()").value(1))
-                .andExpect(jsonPath("$.reviews[0].body").value("Great film"))
-                .andExpect(jsonPath("$.reviews[0].authorName").value("movie_fan_43"));
+                .andExpect(jsonPath("$.totalItems").value(1))
+                .andExpect(jsonPath("$.items[0].body").value("Great film"))
+                .andExpect(jsonPath("$.items[0].authorName").value("movie_fan_43"));
     }
 
     @Test
@@ -129,8 +129,8 @@ class MovieApiIntegrationTest {
         mockMvc.perform(delete("/api/v1/reviews/{id}", reviewId).with(movieFan42()))
                 .andExpect(status().isNoContent());
 
-        mockMvc.perform(get("/api/v1/movies/tt0000001"))
-                .andExpect(jsonPath("$.reviews.length()").value(0));
+        mockMvc.perform(get("/api/v1/movies/tt0000001/reviews"))
+                .andExpect(jsonPath("$.totalItems").value(0));
         assertThat(reviewRepository.count()).isZero();
     }
 
@@ -155,5 +155,29 @@ class MovieApiIntegrationTest {
                 .andExpect(status().isNoContent());
 
         assertThat(reviewRepository.count()).isZero();
+    }
+    @Test
+    void reviewsArePagedNewestFirst() throws Exception {
+        postReview(movieFan43(), "first");
+        postReview(movieFan42(), "second");
+        postReview(movieFan43(), "third");
+
+        mockMvc.perform(get("/api/v1/movies/tt0000001/reviews").param("size", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalItems").value(3))
+                .andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.items[0].body").value("third"))
+                .andExpect(jsonPath("$.items[1].body").value("second"));
+
+        mockMvc.perform(get("/api/v1/movies/tt0000001/reviews").param("size", "2").param("page", "1"))
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].body").value("first"));
+    }
+
+    @Test
+    void reviewsOfAnUnknownMovieAre404() throws Exception {
+        mockMvc.perform(get("/api/v1/movies/tt0000000/reviews"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.title").value("Movie not found"));
     }
 }

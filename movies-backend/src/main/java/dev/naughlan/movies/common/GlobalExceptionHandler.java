@@ -15,6 +15,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+import dev.naughlan.movies.security.RateLimitExceededException;
+
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 

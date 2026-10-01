@@ -67,7 +67,6 @@ class TmdbMovieMapperTest {
         assertThat(movie.getBackdrops()).containsExactly("https://image.tmdb.org/t/p/w1280/backdrop.jpg");
         assertThat(movie.getGenres()).containsExactly("Drama");
         assertThat(movie.getTrendingRank()).isEqualTo(1);
-        assertThat(movie.getReviewIds()).isNull(); // never set by the sync, so app reviews survive
     }
 
     @Test
