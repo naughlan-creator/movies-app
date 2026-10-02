@@ -26,7 +26,7 @@ services:
       - ./keycloak/import:/opt/keycloak/data/import:ro
 
   mongo:
-    image: mongo:8.0
+    image: mongo:8.2
     # A single-node replica set: MongoDB only supports multi-document transactions on replica sets
     # (used by the transactional outbox). Atlas clusters are always replica sets.
     command: ["--replSet", "rs0", "--bind_ip_all"]
