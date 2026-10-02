@@ -23,7 +23,7 @@
     "react-player": "^3.4.0",
     "react-router-dom": "^7.18.4",
     "react-scripts": "^5.0.1",
-    "web-vitals": "^2.1.4"
+    "web-vitals": "^6.2.2"
   },
   "scripts": {
     "start": "react-scripts start",
