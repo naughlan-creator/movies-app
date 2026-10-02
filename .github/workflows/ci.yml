@@ -71,6 +71,9 @@ jobs:
   secrets:
     name: Secret scan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read # a job-level block replaces the top-level one
+      pull-requests: read # gitleaks lists the PR's commits through the API
     steps:
       - uses: actions/checkout@v7
         with:
