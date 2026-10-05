@@ -152,6 +152,12 @@
 			<groupId>com.github.ben-manes.caffeine</groupId>
 			<artifactId>caffeine</artifactId>
 		</dependency>
+		<!-- Official Anthropic SDK: calls Claude's Messages API -->
+		<dependency>
+			<groupId>com.anthropic</groupId>
+			<artifactId>anthropic-java</artifactId>
+			<version>2.68.0</version>
+		</dependency>
 	</dependencies>
 
 	<build>
