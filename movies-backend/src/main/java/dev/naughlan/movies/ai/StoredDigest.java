@@ -14,10 +14,11 @@ import org.springframework.data.mongodb.core.mapping.Document;
 public record StoredDigest(
         @Id String imdbId,
         ReviewDigest digest,
-        int reviewsUsed,
+        // Boxed (Integer/Long, not int/long): a queued document has no values yet, and primitives can't be null
+        Integer reviewsUsed,
         String model,
-        long inputTokens,
-        long outputTokens,
+        Long inputTokens,
+        Long outputTokens,
         Instant generatedAt,
         Instant staleSince) {
 }

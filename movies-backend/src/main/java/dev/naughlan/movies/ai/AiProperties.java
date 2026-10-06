@@ -8,16 +8,19 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * Typed view of every app.ai.* property in application.properties.
  */
 @ConfigurationProperties("app.ai")
-public record AiProperties(String apiKey, String model, long maxTokens, Duration timeout) {
+public record AiProperties(String apiKey, String model, long maxTokens, Duration timeout, Digest digest) {
+
+     /** app.ai.digest.* */
+    public record Digest(boolean refreshEnabled, Duration delay, int maxPerRun) {
+    }
 
     public boolean hasApiKey() {
         return apiKey != null && !apiKey.isBlank();
     }
 
-    // Never let the key reach a log line: records print every field in toString()
     @Override
     public String toString() {
-        return "AiProperties[apiKey=%s, model=%s, maxTokens=%d, timeout=%s]"
-                .formatted(hasApiKey() ? "****" : "<not set>", model, maxTokens, timeout);
+        return "AiProperties[apiKey=%s, model=%s, maxTokens=%d, timeout=%s, digest=%s]"
+                .formatted(hasApiKey() ? "****" : "<not set>", model, maxTokens, timeout, digest);
     }
 }
