@@ -1,7 +1,9 @@
 package dev.naughlan.movies.ai;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,15 +58,18 @@ public class ReviewDigestService {
         private final ReviewRepository reviewRepository;
         private final TmdbClient tmdbClient;
         private final TmdbProperties tmdbProperties;
+        private final StoredDigestRepository digestRepository;
 
         ReviewDigestService(AnthropicClient client, AiProperties properties, MovieService movieService,
-                        ReviewRepository reviewRepository, TmdbClient tmdbClient, TmdbProperties tmdbProperties) {
+                        ReviewRepository reviewRepository, TmdbClient tmdbClient, TmdbProperties tmdbProperties,
+                        StoredDigestRepository digestRepository) {
                 this.client = client;
                 this.properties = properties;
                 this.movieService = movieService;
                 this.reviewRepository = reviewRepository;
                 this.tmdbClient = tmdbClient;
                 this.tmdbProperties = tmdbProperties;
+                this.digestRepository = digestRepository;
         }
 
         public DigestPreview preview(String imdbId) {
@@ -164,5 +169,30 @@ public class ReviewDigestService {
                 List<AudienceReview> stored = movie.getAudienceReviews() == null ? List.of()
                                 : movie.getAudienceReviews();
                 return stored.stream().map(AudienceReview::content).toList();
+        }
+
+        /** The stored digest, if one has been generated. */
+        public Optional<StoredDigest> find(String imdbId) {
+                return digestRepository.findById(imdbId).filter(stored -> stored.digest() != null);
+        }
+
+        /**
+         * Generates a digest and stores it. A review that arrives while Claude is
+         * working (9 s!) marks the digest
+         * stale again; we must not wipe that mark when we save, or that review would
+         * never be summarized.
+         */
+        public StoredDigest regenerate(String imdbId) {
+                Instant startedAt = Instant.now();
+                DigestPreview generated = preview(imdbId);
+
+                Instant staleSince = digestRepository.findById(imdbId)
+                                .map(StoredDigest::staleSince)
+                                .filter(stale -> stale.isAfter(startedAt))
+                                .orElse(null);
+
+                return digestRepository.save(new StoredDigest(imdbId, generated.digest(), generated.reviewsUsed(),
+                                generated.model(), generated.inputTokens(), generated.outputTokens(), Instant.now(),
+                                staleSince));
         }
 }

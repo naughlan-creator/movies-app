@@ -1,9 +1,10 @@
 package dev.naughlan.movies.ai;
 
+import java.util.function.Supplier;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -47,18 +48,33 @@ class ReviewDigestController {
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/{imdbId}/digest-preview")
     public DigestPreview preview(@PathVariable String imdbId) {
+        return callClaude(imdbId, () -> digestService.preview(imdbId));
+    }
+
+    @Operation(summary = "Regenerate and store a movie's AI digest now")
+    @ApiResponse(responseCode = "200", description = "Digest stored")
+    @ApiResponse(responseCode = "403", description = "Not an admin", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(responseCode = "502", description = "The AI service failed", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(responseCode = "503", description = "ANTHROPIC_API_KEY is not configured", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
+    @SecurityRequirement(name = "keycloak")
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/{imdbId}/digest")
+    public StoredDigest regenerate(@PathVariable String imdbId) {
+        return callClaude(imdbId, () -> digestService.regenerate(imdbId));
+    }
+
+    // One place that turns "AI is off" and AI failures into HTTP errors, for every
+    // endpoint that calls Claude
+    private <T> T callClaude(String imdbId, Supplier<T> call) {
         if (!properties.hasApiKey()) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "ANTHROPIC_API_KEY is not configured");
         }
         try {
-            return digestService.preview(imdbId);
+            return call.get();
         } catch (AnthropicServiceException e) {
-            // The API answered with an error status (bad request, auth, rate limit,
-            // overloaded...)
             log.warn("Claude API returned {} for {}", e.statusCode(), imdbId);
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "AI request failed");
         } catch (AnthropicIoException e) {
-            // We never got an answer: network error or timeout (after the SDK's retries)
             log.warn("Claude API unreachable for {}: {}", imdbId, e.getMessage());
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "AI service unreachable");
         } catch (UnsafeDigestException e) {

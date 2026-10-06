@@ -1,0 +1,23 @@
+package dev.naughlan.movies.ai;
+
+import java.time.Instant;
+
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
+
+/**
+ * The latest digest for one movie. staleSince is set when reviews change after it was generated,
+ * and is absent while the digest is up to date. A document with only imdbId + staleSince means
+ * "never generated, queued".
+ */
+@Document("review_digests")
+public record StoredDigest(
+        @Id String imdbId,
+        ReviewDigest digest,
+        int reviewsUsed,
+        String model,
+        long inputTokens,
+        long outputTokens,
+        Instant generatedAt,
+        Instant staleSince) {
+}
