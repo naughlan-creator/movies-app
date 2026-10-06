@@ -1,5 +1,7 @@
 # Movie Gold
 
+[![CI](https://github.com/naughlan-creator/movies-app/actions/workflows/ci.yml/badge.svg)](https://github.com/naughlan-creator/movies-app/actions/workflows/ci.yml)
+
 A movie hub for people who are too busy to watch everything: each week's trending movies with a short
 synopsis, ratings, trailers and the best reviews, plus your own reviews.
 
