@@ -10,6 +10,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -51,12 +53,15 @@ class ReviewDigestControllerTest {
     @Test
     void adminsGetADigest() throws Exception {
         when(aiProperties.hasApiKey()).thenReturn(true);
-        when(digestService.preview("tt3915174"))
-                .thenReturn(new DigestPreview("Loud, divisive, fun.", "claude-opus-5-5", "end_turn", 573, 264, 4200));
+        when(digestService.preview("tt3915174")).thenReturn(new DigestPreview(
+                new ReviewDigest("Loud, divisive, fun.", List.of("Cruise"), List.of("Too long"), "Fans of satire",
+                        ReviewDigest.Sentiment.MIXED),
+                3, "claude-opus-5-5", "end_turn", 573, 264, 4200));
 
         mockMvc.perform(post(URL).with(movieFan43()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.digest").value("Loud, divisive, fun."))
+                .andExpect(jsonPath("$.digest.verdict").value("Loud, divisive, fun."))
+                .andExpect(jsonPath("$.digest.sentiment").value("MIXED"))
                 .andExpect(jsonPath("$.inputTokens").value(573));
     }
 

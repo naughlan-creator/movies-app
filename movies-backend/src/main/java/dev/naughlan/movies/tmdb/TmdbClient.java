@@ -13,7 +13,7 @@ import org.springframework.web.client.RestClient;
  * The only class that talks HTTP to TMDB. Everything else works with Java records.
  */
 @Component
-class TmdbClient {
+public class TmdbClient {
 
     private final RestClient restClient;
 
@@ -46,5 +46,15 @@ class TmdbClient {
                 .uri("/movie/{id}?language=en-US&append_to_response=credits,videos,reviews", tmdbId)
                 .retrieve()
                 .body(TmdbMovieDetails.class);
+    }
+
+    // Whole review texts for the AI digest. The stored audienceReviews are short snippets made for the page.
+    // One page = up to 20 reviews
+    public List<TmdbMovieDetails.ReviewEntry> reviews(int tmdbId) {
+        TmdbMovieDetails.Reviews page = restClient.get()
+                .uri("/movie/{id}/reviews?language=en-US&page=1", tmdbId)
+                .retrieve()
+                .body(TmdbMovieDetails.Reviews.class);
+        return page == null || page.results() == null ? List.of() : page.results();
     }
 }
