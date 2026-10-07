@@ -26,7 +26,7 @@ class DigestInvalidator {
     // "latest": on its very first start, don't replay the topic's whole history (each replayed movie would
     // become a paid regeneration). Trending movies without a digest are picked up by the refresher instead.
     @KafkaListener(topics = ReviewEvents.TOPIC, groupId = "review-digest",
-            properties = "auto.offset.reset=latest")
+            properties = "auto.offset.reset=${app.ai.digest.kafka-offset-reset:latest}")
     void on(String payload) {
         ReviewEvent event = jsonMapper.readValue(payload, ReviewEvent.class);
         if (event.imdbId() == null) {
