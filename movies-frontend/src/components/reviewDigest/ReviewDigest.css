@@ -1,0 +1,57 @@
+.review-digest{
+    padding: 1rem 1.2rem;
+    border: 1px solid #3a3320;
+    border-radius: 8px;
+    background: #12110c;
+}
+.review-digest-header{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.6rem;
+}
+.review-digest-header > h5{
+    color: gold;
+    margin: 0;
+}
+.digest-sentiment{
+    font-size: 0.8rem;
+    font-weight: bold;
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+.digest-sentiment-positive{ background: #163a22; color: #7ee2a0; }
+.digest-sentiment-mixed{ background: #3a3216; color: #f2d36b; }
+.digest-sentiment-negative{ background: #3d1a1a; color: #f29a9a; }
+.digest-sentiment-unknown{ background: #2a2a2a; color: #bbb; }
+
+.digest-verdict{
+    font-size: 1.05rem;
+    color: #eee;
+}
+.digest-columns{
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.5rem 1.5rem;
+}
+.digest-columns h6{
+    color: #bbb;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+}
+.digest-columns ul{
+    padding-left: 1.1rem;
+    color: #ddd;
+}
+.digest-watch-if{
+    color: #ddd;
+}
+.digest-footnote{
+    margin: 0;
+    font-size: 0.8rem;
+    color: #888;
+}

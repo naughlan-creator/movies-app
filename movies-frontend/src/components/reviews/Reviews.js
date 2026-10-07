@@ -7,6 +7,7 @@ import {Button, Container, Row, Col} from 'react-bootstrap';
 import ReviewForm from '../reviewForm/ReviewForm';
 import { formatMeta } from '../../utils/movieFormat';
 import NotFound from '../notFound/NotFound';
+import ReviewDigest from '../reviewDigest/ReviewDigest';
 
 const REVIEWS_PER_PAGE = 10;
 
@@ -163,6 +164,8 @@ const Reviews = ({getMovieData, movie, movieNotFound}) => {
                         </div>
                     </section>
                 )}
+
+                <ReviewDigest movieId={movieId} />
 
                 <section className="reviews-section">
                     <h5>What viewers are saying</h5>
