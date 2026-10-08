@@ -79,6 +79,9 @@ class ReviewDigestController {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "AI service unreachable");
         } catch (UnsafeDigestException e) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "AI output failed safety checks");
+        } catch (DigestNotProducedException e) {
+            log.warn("No digest for {}:{}", imdbId, e.getMessage());
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "AI did not produce a digest");
         }
     }
 }

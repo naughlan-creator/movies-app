@@ -20,5 +20,8 @@ public record StoredDigest(
         Long inputTokens,
         Long outputTokens,
         Instant generatedAt,
-        Instant staleSince) {
+        Instant staleSince,
+        // SHA-256 of model + system prompt + user prompt: same hash = same input = no need to call the model again
+        String inputHash
+) {
 }

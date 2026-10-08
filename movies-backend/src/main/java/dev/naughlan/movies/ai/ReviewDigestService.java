@@ -3,6 +3,10 @@ package dev.naughlan.movies.ai;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,35 +66,57 @@ public class ReviewDigestService {
                 this.digestRepository = digestRepository;
         }
 
-        public DigestPreview preview(String imdbId) {
+        /**
+         * Everything a digest is made from. Same hash = same input = (nearly) the same
+         * answer.
+         */
+        record DigestInput(String prompt, int reviewsUsed, String hash) {
+        }
+
+        DigestInput collectInput(String imdbId) {
                 Movie movie = movieService.singleMovie(imdbId); // 404 if the movie doesn't exist
                 List<String> tmdbReviews = tmdbReviewTexts(movie);
                 List<Review> appReviews = reviewRepository.findByImdbId(imdbId,
                                 PageRequest.of(0, MAX_APP_REVIEWS, Sort.by(Sort.Direction.DESC, "createdAt")))
                                 .getContent();
-                int reviewsUsed = tmdbReviews.size() + appReviews.size();
+                String prompt = buildPrompt(movie, tmdbReviews, appReviews);
+                return new DigestInput(prompt, tmdbReviews.size() + appReviews.size(),
+                                sha256(properties.model() + "\n" + SYSTEM_PROMPT + "\n" + prompt));
+        }
 
+        private static String sha256(String text) {
+                try {
+                        byte[] hash = MessageDigest.getInstance("SHA-256")
+                                        .digest(text.getBytes(StandardCharsets.UTF_8));
+                        return HexFormat.of().formatHex(hash);
+                } catch (NoSuchAlgorithmException e) {
+                        throw new IllegalStateException("Every JVM must support SHA-256", e);
+                }
+        }
+
+        public DigestPreview preview(String imdbId) {
+                return generate(imdbId, collectInput(imdbId));
+        }
+
+        private DigestPreview generate(String imdbId, DigestInput input) {
                 // Every call costs money: don't pay to summarize nothing
-                if (reviewsUsed == 0) {
+                if (input.reviewsUsed() == 0) {
                         return new DigestPreview(ReviewDigest.noReviews(), 0, properties.model(), "skipped", 0, 0, 0);
                 }
 
-                DigestModel.Result result = digestModel.summarize(SYSTEM_PROMPT,
-                                buildPrompt(movie, tmdbReviews, appReviews));
+                DigestModel.Result result = digestModel.summarize(SYSTEM_PROMPT, input.prompt());
 
                 log.info("Digest for {}: reviews={} model={} stopReason={} inputTokens={} outputTokens={} latencyMs={}",
-                                imdbId, reviewsUsed, result.model(), result.stopReason(),
+                                imdbId, input.reviewsUsed(), result.model(), result.stopReason(),
                                 result.inputTokens(), result.outputTokens(), result.latencyMs());
 
                 List<String> problems = result.digest().problems();
                 if (!problems.isEmpty()) {
-                        // Logged so we can see attacks or model mistakes; the digest itself is thrown
-                        // away
                         log.warn("Rejected digest for {}: {}", imdbId, problems);
                         throw new UnsafeDigestException(imdbId, problems);
                 }
 
-                return new DigestPreview(result.digest(), reviewsUsed, result.model(), result.stopReason(),
+                return new DigestPreview(result.digest(), input.reviewsUsed(), result.model(), result.stopReason(),
                                 result.inputTokens(), result.outputTokens(), result.latencyMs());
         }
 
@@ -145,22 +171,40 @@ public class ReviewDigestService {
         }
 
         /**
-         * Generates a digest and stores it. A review that arrives while Claude is
-         * working (9 s!) marks the digest
-         * stale again; we must not wipe that mark when we save, or that review would
-         * never be summarized.
+         * Generates a digest and stores it, unless the input is identical to the stored
+         * digest's.
+         * A review that arrives while we work marks the digest stale again; we must not
+         * wipe that mark when we save.
          */
         public StoredDigest regenerate(String imdbId) {
                 Instant startedAt = Instant.now();
-                DigestPreview generated = preview(imdbId);
+                DigestInput input = collectInput(imdbId);
+                Optional<StoredDigest> current = digestRepository.findById(imdbId);
 
-                Instant staleSince = digestRepository.findById(imdbId)
+                if (current.isPresent() && current.get().digest() != null
+                                && input.hash().equals(current.get().inputHash())) {
+                        StoredDigest same = current.get();
+                        log.info("Digest for {} unchanged since {}, skipped the model call", imdbId,
+                                        same.generatedAt());
+                        return digestRepository
+                                        .save(new StoredDigest(imdbId, same.digest(), same.reviewsUsed(), same.model(),
+                                                        same.inputTokens(), same.outputTokens(), same.generatedAt(),
+                                                        staleSinceAfter(imdbId, startedAt),
+                                                        same.inputHash()));
+                }
+
+                DigestPreview generated = generate(imdbId, input);
+                return digestRepository.save(new StoredDigest(imdbId, generated.digest(), generated.reviewsUsed(),
+                                generated.model(), generated.inputTokens(), generated.outputTokens(), Instant.now(),
+                                staleSinceAfter(imdbId, startedAt), input.hash()));
+        }
+
+        // Read AFTER the work is done: a review event during the model call must keep
+        // the digest stale
+        private Instant staleSinceAfter(String imdbId, Instant startedAt) {
+                return digestRepository.findById(imdbId)
                                 .map(StoredDigest::staleSince)
                                 .filter(stale -> stale.isAfter(startedAt))
                                 .orElse(null);
-
-                return digestRepository.save(new StoredDigest(imdbId, generated.digest(), generated.reviewsUsed(),
-                                generated.model(), generated.inputTokens(), generated.outputTokens(), Instant.now(),
-                                staleSince));
         }
 }

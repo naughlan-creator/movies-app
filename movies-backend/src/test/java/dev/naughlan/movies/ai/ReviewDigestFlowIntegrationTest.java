@@ -36,16 +36,19 @@ import dev.naughlan.movies.review.ReviewRepository;
 
 /**
  * The whole digest pipeline against real MongoDB and Kafka, with a fake model:
- * review -> outbox -> Kafka -> DigestInvalidator (stale) -> DigestRefresher -> stored digest -> public GET.
+ * review -> outbox -> Kafka -> DigestInvalidator (stale) -> DigestRefresher ->
+ * stored digest -> public GET.
  */
 @SpringBootTest(properties = {
-        // AI switched "on"... but the model is the fake below, so no test ever calls Claude or costs money
+        // AI switched "on"... but the model is the fake below, so no test ever calls
+        // Claude or costs money
         "app.ai.api-key=test-key",
         "app.ai.digest.refresh-enabled=true",
         "app.ai.digest.delay=0s",
         // The tests call refresh() themselves; the schedule just stays out of the way
         "app.ai.digest.refresh-interval=1h",
-        // Fresh Kafka per test context: start from the beginning, so no event is missed while the consumer joins
+        // Fresh Kafka per test context: start from the beginning, so no event is missed
+        // while the consumer joins
         "app.ai.digest.kafka-offset-reset=earliest"
 })
 @AutoConfigureMockMvc
@@ -74,6 +77,9 @@ class ReviewDigestFlowIntegrationTest {
     @Autowired
     private DigestRefresher refresher;
 
+    @Autowired
+    private DigestQueue queue;
+
     @BeforeEach
     void setUp() {
         digestRepository.deleteAll();
@@ -91,13 +97,14 @@ class ReviewDigestFlowIntegrationTest {
 
     private void postReviewAndWaitUntilQueued(String body) throws Exception {
         mockMvc.perform(post("/api/v1/reviews").with(movieFan42())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"reviewBody": "%s", "imdbId": "%s"}
-                                """.formatted(body, IMDB_ID)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"reviewBody": "%s", "imdbId": "%s"}
+                        """.formatted(body, IMDB_ID)))
                 .andExpect(status().isCreated());
 
-        // review -> outbox -> relay -> Kafka -> DigestInvalidator: asynchronous, so wait for the effect
+        // review -> outbox -> relay -> Kafka -> DigestInvalidator: asynchronous, so
+        // wait for the effect
         await().atMost(Duration.ofSeconds(30))
                 .until(() -> stored().map(StoredDigest::staleSince).isPresent());
     }
@@ -109,11 +116,13 @@ class ReviewDigestFlowIntegrationTest {
     @Test
     void aNewReviewQueuesTheDigestAndTheRefresherGeneratesIt() throws Exception {
         when(digestModel.summarize(anyString(), anyString())).thenReturn(answer(new ReviewDigest(
-                "Viewers loved it.", List.of("The story"), List.of(), "Fans of drama", ReviewDigest.Sentiment.POSITIVE)));
+                "Viewers loved it.", List.of("The story"), List.of(), "Fans of drama",
+                ReviewDigest.Sentiment.POSITIVE)));
 
         postReviewAndWaitUntilQueued("A <b>moving</b> story");
 
-        // Queued but never generated: a clean 404. (The StoredDigest primitives bug made this a 500.)
+        // Queued but never generated: a clean 404. (The StoredDigest primitives bug
+        // made this a 500.)
         mockMvc.perform(get(DIGEST_URL)).andExpect(status().isNotFound());
 
         refresher.refresh();
@@ -157,5 +166,23 @@ class ReviewDigestFlowIntegrationTest {
 
         mockMvc.perform(get(DIGEST_URL)).andExpect(status().isNotFound());
         assertThat(stored().orElseThrow().digest()).isNull();
+    }
+
+    @Test
+    void anUnchangedInputIsNotSentToTheModelAgain() throws Exception {
+        when(digestModel.summarize(anyString(), anyString())).thenReturn(answer(new ReviewDigest(
+                "Viewers loved it.", List.of("The story"), List.of(), "Fans of drama",
+                ReviewDigest.Sentiment.POSITIVE)));
+
+        postReviewAndWaitUntilQueued("Great film");
+        refresher.refresh();
+
+        // Queue it again with nothing changed (like a review posted and deleted again)
+        queue.markStale(IMDB_ID);
+        refresher.refresh();
+
+        verify(digestModel, times(1)).summarize(anyString(), anyString());
+        assertThat(stored().orElseThrow().staleSince()).isNull();
+        assertThat(stored().orElseThrow().digest().verdict()).isEqualTo("Viewers loved it.");
     }
 }

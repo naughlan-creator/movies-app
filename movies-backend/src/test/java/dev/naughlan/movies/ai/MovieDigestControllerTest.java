@@ -35,7 +35,7 @@ class MovieDigestControllerTest {
         ReviewDigest digest = new ReviewDigest("Loud, divisive, fun.", List.of("Cruise"), List.of("Too long"),
                 "Fans of satire", ReviewDigest.Sentiment.MIXED);
         when(digestService.find("tt3915174")).thenReturn(Optional.of(new StoredDigest(
-                "tt3915174", digest, 4, "claude-opus-5-5", 3019L, 322L, Instant.now(), Instant.now())));
+                "tt3915174", digest, 4, "claude-opus-5-5", 3019L, 322L, Instant.now(), Instant.now(), "hash")));
 
         mockMvc.perform(get("/api/v1/movies/tt3915174/digest"))
                 .andExpect(status().isOk())
