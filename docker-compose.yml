@@ -98,7 +98,7 @@ services:
       - "18200:8200"
 
   caddy:
-    image: caddy:2.11.4-alpine
+    image: caddy:2.11.7-alpine
     # Opt-in: docker compose --profile tls up -d caddy
     profiles: ["tls"]
     ports:
