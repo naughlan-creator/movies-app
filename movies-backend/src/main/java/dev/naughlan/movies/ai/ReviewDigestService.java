@@ -24,6 +24,9 @@ import dev.naughlan.movies.review.ReviewRepository;
 import dev.naughlan.movies.tmdb.TmdbClient;
 import dev.naughlan.movies.tmdb.TmdbMovieDetails;
 import dev.naughlan.movies.tmdb.TmdbProperties;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
 
 @Service
 public class ReviewDigestService {
@@ -53,10 +56,13 @@ public class ReviewDigestService {
         private final TmdbProperties tmdbProperties;
         private final StoredDigestRepository digestRepository;
         private final DigestModel digestModel;
+        private final MeterRegistry meters;
+        private final ObservationRegistry observations;
 
         ReviewDigestService(DigestModel digestModel, AiProperties properties, MovieService movieService,
                         ReviewRepository reviewRepository, TmdbClient tmdbClient, TmdbProperties tmdbProperties,
-                        StoredDigestRepository digestRepository) {
+                        StoredDigestRepository digestRepository, MeterRegistry meters,
+                        ObservationRegistry observations) {
                 this.digestModel = digestModel;
                 this.properties = properties;
                 this.movieService = movieService;
@@ -64,6 +70,8 @@ public class ReviewDigestService {
                 this.tmdbClient = tmdbClient;
                 this.tmdbProperties = tmdbProperties;
                 this.digestRepository = digestRepository;
+                this.meters = meters;
+                this.observations = observations;
         }
 
         /**
@@ -105,6 +113,7 @@ public class ReviewDigestService {
                 }
 
                 DigestModel.Result result = digestModel.summarize(SYSTEM_PROMPT, input.prompt());
+                recordUsage(result);
 
                 log.info("Digest for {}: reviews={} model={} stopReason={} inputTokens={} outputTokens={} latencyMs={}",
                                 imdbId, input.reviewsUsed(), result.model(), result.stopReason(),
@@ -177,6 +186,16 @@ public class ReviewDigestService {
          * wipe that mark when we save.
          */
         public StoredDigest regenerate(String imdbId) {
+                Observation observation = Observation.createNotStarted("app.ai.digest.regenerate", observations)
+                                // Starts as "failed"; replaced on success. An exception leaves "failed" (plus
+                                // an error tag)
+                                .lowCardinalityKeyValue("outcome", "failed")
+                                // On the span only: one value per movie would explode a metric
+                                .highCardinalityKeyValue("movie.imdb_id", imdbId);
+                return observation.observe(() -> regenerate(imdbId, observation));
+        }
+
+        public StoredDigest regenerate(String imdbId, Observation observation) {
                 Instant startedAt = Instant.now();
                 DigestInput input = collectInput(imdbId);
                 Optional<StoredDigest> current = digestRepository.findById(imdbId);
@@ -194,6 +213,7 @@ public class ReviewDigestService {
                 }
 
                 DigestPreview generated = generate(imdbId, input);
+                observation.lowCardinalityKeyValue("outcome", generated.reviewsUsed() == 0 ? "no_reviews" : "generated");
                 return digestRepository.save(new StoredDigest(imdbId, generated.digest(), generated.reviewsUsed(),
                                 generated.model(), generated.inputTokens(), generated.outputTokens(), Instant.now(),
                                 staleSinceAfter(imdbId, startedAt), input.hash()));
@@ -206,5 +226,18 @@ public class ReviewDigestService {
                                 .map(StoredDigest::staleSince)
                                 .filter(stale -> stale.isAfter(startedAt))
                                 .orElse(null);
+        }
+
+        // Recorded even when the digest is rejected afterwards: we paid for those
+        // tokens either way
+        private void recordUsage(DigestModel.Result result) {
+                AiProperties.Price price = properties.price();
+                double cost = (result.inputTokens() * price.inputPerMillionTokens()
+                                + result.outputTokens() * price.outputPerMillionTokens()) / 1_000_000;
+                meters.counter("app.ai.tokens", "type", "input", "model", result.model())
+                                .increment(result.inputTokens());
+                meters.counter("app.ai.tokens", "type", "output", "model", result.model())
+                                .increment(result.outputTokens());
+                meters.counter("app.ai.cost", "model", result.model()).increment(cost);
         }
 }

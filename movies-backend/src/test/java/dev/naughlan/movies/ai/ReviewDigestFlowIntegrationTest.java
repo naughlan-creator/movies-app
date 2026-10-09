@@ -33,6 +33,7 @@ import dev.naughlan.movies.TestcontainersConfiguration;
 import dev.naughlan.movies.movie.Movie;
 import dev.naughlan.movies.movie.MovieRepository;
 import dev.naughlan.movies.review.ReviewRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 
 /**
  * The whole digest pipeline against real MongoDB and Kafka, with a fake model:
@@ -79,6 +80,9 @@ class ReviewDigestFlowIntegrationTest {
 
     @Autowired
     private DigestQueue queue;
+
+    @Autowired
+    private MeterRegistry meters;
 
     @BeforeEach
     void setUp() {
@@ -137,6 +141,10 @@ class ReviewDigestFlowIntegrationTest {
         ArgumentCaptor<String> prompt = ArgumentCaptor.forClass(String.class);
         verify(digestModel).summarize(anyString(), prompt.capture());
         assertThat(prompt.getValue()).contains("A &lt;b&gt;moving&lt;/b&gt; story");
+        // The fake answer used 100 input / 50 output tokens: 100*$4/1M + 50*$20/1M =
+        // $0.0014
+        assertThat(meters.get("app.ai.tokens").tag("type", "input").counter().count()).isGreaterThanOrEqualTo(100);
+        assertThat(meters.get("app.ai.cost").counter().count()).isGreaterThanOrEqualTo(0.0014);
     }
 
     @Test
