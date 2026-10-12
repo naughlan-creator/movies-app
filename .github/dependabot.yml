@@ -14,7 +14,14 @@ updates:
       interval: weekly
     groups:
       react:
-        patterns: ["react", "react-dom"]   # always bumped together, never split again
+        patterns: ["react", "react-dom"]
+    # React 19 is a planned upgrade (react + react-dom together), not a weekly bump.
+    # Delete this block when we do that upgrade.
+    ignore:
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
