@@ -38,7 +38,8 @@ public class ReviewDigestService {
 
         // The system prompt sets the model's job. It's the same for every movie; only
         // the reviews change.
-        private static final String SYSTEM_PROMPT = """
+        // Package-private so the eval can record the exact prompt in its transcripts
+        static final String SYSTEM_PROMPT = """
                         You summarize what viewers say about a movie, for people who are too busy to read every review.
                         Use only the reviews provided; don't add facts about the movie from anywhere else.
                         Write plain, neutral English and don't name the reviewers.

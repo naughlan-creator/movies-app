@@ -29,6 +29,11 @@ final class GroundingJudge {
             1. Unsupported claims: list every statement in the digest that no review supports. Facts the reviews
                don't mention (names of actors, directors or characters, awards, comparisons to other films, plot
                details) are unsupported even if they are true. Fair paraphrases and summaries of the reviews are supported.
+               Overstatements are unsupported too: calling a point common or shared when only one review
+               makes it, or making a review's opinion sound stronger than it is.
+               These are fair, not unsupported: combining points from different reviews into one sentence, and
+               a "who will enjoy it" recommendation inferred from what the reviews praise and criticize, as long as
+               it invents no facts and doesn't contradict the reviews.
             2. Coverage: does the digest reflect the praise and the complaints that appear in more than one review?
             Keep the explanation to one or two sentences.
             """;
@@ -88,7 +93,10 @@ final class GroundingJudge {
 
     // Escaped like production, so a review can't close its tag and talk to the judge
     static String prompt(EvalCase evalCase, ReviewDigest digest) {
-        StringBuilder prompt = new StringBuilder();
+        StringBuilder prompt = new StringBuilder()
+                // The digest model sees the title and year, so details taken from them are supported
+                .append("Movie: ").append(HtmlUtils.htmlEscape(evalCase.title()))
+                .append(" (").append(evalCase.releaseDate()).append(")\n\n");
         for (String review : evalCase.allReviews()) {
             prompt.append("<review>\n").append(HtmlUtils.htmlEscape(review)).append("\n</review>\n");
         }
