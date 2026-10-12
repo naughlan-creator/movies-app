@@ -20,3 +20,4 @@ Thumbs.db
 evals/**/traces/
 evals/**/report.html
 evals/**/trajectory/
+evals/build-report-lite.mjs

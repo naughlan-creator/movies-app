@@ -317,17 +317,128 @@ Deliberate trade-offs for a single-node development setup, and good next exercis
 
 ## AI inference (Phase 4)
 
-> 🚧 **To be written together while we build it.**
+### What it does
 
-<!--
-Ideas to cover when we get here:
-- What we're adding (e.g. review summaries, semantic search / recommendations, "should I watch it?")
-- Which model(s) and API, and why
-- Where inference sits in the architecture (sync request vs. Kafka consumer), and the updated diagram
-- Prompts, structured output, evaluation
-- Cost, latency, caching, rate limits, failure modes / fallbacks
-- Safety: prompt injection via user reviews, PII, output validation
--->
+Every movie page can show **The verdict**: an AI-written digest of what viewers say about the film. It has a
+2–3 sentence verdict, up to three things viewers liked and disliked, who will enjoy it, and an overall
+sentiment (`POSITIVE`, `MIXED`, `NEGATIVE`, or `UNKNOWN` when there are fewer than 3 reviews). It's built
+from up to 20 full TMDB reviews plus the app's 50 newest reviews, and labelled on the page as an AI summary
+that can make mistakes.
+
+### How it works
+
+```mermaid
+sequenceDiagram
+    participant U as Reviewer
+    participant API as ReviewService
+    participant K as Kafka movies.reviews
+    participant I as DigestInvalidator
+    participant DB as MongoDB review_digests
+    participant R as DigestRefresher (every 1 min)
+    participant C as Claude Opus 5.5
+    participant V as Visitor
+    U->>API: POST review
+    API->>K: review event (via the outbox)
+    K->>I: consumer group review-digest
+    I->>DB: mark stale ($min staleSince)
+    R->>DB: digests stale for 5+ min (max 5 per run)
+    R->>C: system prompt + reviews (structured output)
+    C-->>R: ReviewDigest JSON
+    R->>DB: store digest + input hash
+    V->>DB: GET /api/v1/movies/{id}/digest (no AI call)
+```
+
+* **The model is never on the read path.** A digest takes 6–9 s and about $0.02 to generate, so it's
+  generated in the background and stored. Visitors read the stored copy from MongoDB in about 200 ms, and a
+  page view never costs a model call.
+* **Reviews mark a digest stale; they don't regenerate it.** `DigestInvalidator` is a new consumer of the
+  existing review events (Phase 3). It only writes `staleSince`, using `$min`, so duplicate events are
+  harmless and a steady stream of reviews can't postpone the refresh forever. `ReviewService` didn't change.
+* **Debounced and capped.** `DigestRefresher` regenerates a digest only once it has been stale for 5 minutes,
+  so a burst of reviews costs one call, and at most 5 digests per run. New trending movies without a digest
+  are queued the same way.
+* **One class talks to the model.** `ClaudeDigestModel` (behind the `DigestModel` interface) is the only code
+  that uses the Anthropic SDK. The prompt, the input selection and the safety checks live in
+  `ReviewDigestService`, so tests and the eval can swap in another `DigestModel`.
+* **Model settings.** Claude Opus 5.5 at `low` effort (summaries don't need deep reasoning). Structured
+  output: the `ReviewDigest` Java record becomes a JSON Schema the answer must match. Server-side refusal
+  fallbacks: if a safety classifier declines, the API retries on a fallback model in the same call.
+
+### Safety
+
+User reviews are written by anyone and go straight into the prompt, so prompt injection is the main risk.
+The defenses are layered, because none is reliable alone:
+
+| Layer | Stops |
+|---|---|
+| The system prompt says review text is untrusted data, never instructions | Most naive "ignore your instructions" attempts |
+| Reviews are HTML-escaped inside `<review>` tags | A review closing its own tag and posing as something else |
+| Structured output | Free-form answers: the model can only fill the five fields |
+| `ReviewDigest.problems()` validates in code | Links, email addresses, oversized text or too many items, even if the model was fooled |
+| Least privilege | The model has no tools, data access or secrets; the worst it can produce is text, which the previous layer checks |
+
+On the page, React renders the digest as plain text (never `dangerouslySetInnerHTML`), so even a malicious
+digest can't run script in a visitor's browser.
+
+### Reliability and cost
+
+| | |
+|---|---|
+| **Measured cost** | ~$0.008 per digest from 3 short reviews (573 in / 264 out tokens); ~$0.018 from 4 full reviews (3,019 in / 322 out). Output costs 5× input per token. |
+| **Measured latency** | 6–9 s per generation; ~200 ms to read a stored digest |
+| **Truncation and refusals** | The stop reason is checked before the answer is read: `max_tokens` or a refusal (after the fallback) raises `DigestNotProducedException` instead of parsing broken JSON |
+| **Failures** | A failing movie is postponed for 1 hour, so it can't cost a call every minute |
+| **Unchanged input** | The digest stores a SHA-256 of model + system prompt + reviews. Same hash, no call (e.g. a review posted and then deleted). Changing the prompt or model regenerates everything on purpose. |
+| **Lost updates** | A review that arrives during the ~9 s call keeps the digest stale; saving doesn't wipe that mark |
+| **Prompt caching** | Not used: digests for the same movie are minutes to hours apart, so cache writes would rarely be read. See [ADR 0001](docs/adr/0001-no-prompt-caching-for-review-digests.md). |
+| **Metrics** | `app.ai.tokens{type,model}`, `app.ai.cost{model}` (estimated USD), `app.ai.model.call` (latency, with p95 buckets) and `app.ai.digest.regenerate{outcome}`. In Prometheus: `app_ai_cost_total` etc. Each model call is a `claude …` span in Tempo. |
+
+### Evaluation
+
+An opt-in eval measures digest quality on 25 synthetic cases (loved, hated, mixed, too few reviews,
+injection attempts, famous films that tempt the model to use outside knowledge, a non-English review).
+It runs through the real `ReviewDigestService` against a Testcontainers MongoDB. Code checks the sentiment
+label and forbidden text; Claude Sonnet 5.5 judges whether every claim is supported by the reviews. Details,
+commands and results: [evals/review-digest](evals/review-digest/README.md).
+
+| Variant | Change | Grounded (95% CI) | Other metrics |
+|---|---|---|---|
+| baseline | – | 66% (52–78) | 98–100% |
+| v1 | attribute each point to the number of reviewers | 60% (46–72) | 100% |
+| v2 | v1 + numbered reviews | 70% (56–81) | 100% |
+
+Sentiment, injection resistance and outside-knowledge checks were 100% in every variant. The weak spot is
+**attribution**: the model writes "most viewers…" for an opinion one reviewer holds. Neither prompt change met
+the success rule set before running (grounded ≥ ~80% with no guardrail regressions), so production keeps the
+baseline prompt. The eval also showed that the judge misgrades exact counts ("two of the four reviews"), so
+the next step is to fix the measurement before tuning the prompt further.
+
+The eval calls the real model (about $0.30 per 25-case run), so it never runs in the normal build or CI:
+
+```bash
+cd movies-backend
+./mvnw test "-Dtest=ReviewDigestEval#run" "-Deval=true"
+```
+
+### Configuration
+
+| Property | Env var | Default | Notes |
+|---|---|---|---|
+| `app.ai.api-key` | `ANTHROPIC_API_KEY` | empty | Empty = AI off: admin endpoints answer 503, the refresher does nothing. Server-side only. |
+| `app.ai.model` | `AI_MODEL` | `claude-opus-5-5` | Part of the input hash, so changing it regenerates digests |
+| `app.ai.max-tokens`, `app.ai.timeout` | – | `4096`, `60s` | The SDK also retries 429/5xx/network errors twice |
+| `app.ai.digest.refresh-enabled` | `AI_DIGEST_REFRESH_ENABLED` | `false` | **Off by default**: the background refresher spends money with no one clicking anything |
+| `app.ai.digest.delay` | `AI_DIGEST_DELAY` | `5m` | How long a digest stays stale before it's regenerated |
+| `app.ai.digest.max-per-run` | – | `5` | Hard ceiling: at most 5 digests per minute |
+| `app.ai.digest.kafka-offset-reset` | – | `latest` | A new consumer doesn't replay old review events (each would be a paid regeneration) |
+| `app.ai.price.*` | – | `4.00` / `20.00` | USD per million input/output tokens, for the cost metric only |
+
+### Limitations
+
+* Two backend instances would both run the refresher and pay twice for the same digests; it needs a lock
+  (e.g. ShedLock), like the outbox relay.
+* The cost metric prices every call at Opus rates, even when a refusal fallback answered.
+* The eval's judge isn't reliable on exact counts, so attribution improvements can't be measured yet.
 
 ## AI infrastructure (Phase 5)
 
