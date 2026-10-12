@@ -15,3 +15,8 @@ Thumbs.db
 
 # ---- Claude Code personal settings ----
 .claude/
+
+# ---- Eval output that can be regenerated ----
+evals/**/traces/
+evals/**/report.html
+evals/**/trajectory/

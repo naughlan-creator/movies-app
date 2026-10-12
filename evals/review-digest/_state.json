@@ -1,0 +1,9 @@
+{
+  "metrics": [
+    {"id": "sentiment",    "kind": "binary", "label": "Sentiment"},
+    {"id": "grounded",     "kind": "binary", "label": "Grounded"},
+    {"id": "no_forbidden", "kind": "binary", "label": "No forbidden"},
+    {"id": "coverage",     "kind": "binary", "label": "Covers points"},
+    {"id": "safe",         "kind": "binary", "label": "Passed safety"}
+  ]
+}
