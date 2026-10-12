@@ -21,6 +21,6 @@ ENV REACT_APP_API_BASE_URL=$REACT_APP_API_BASE_URL \
 RUN npm run build
 
 # ---- Stage 2: serve the files (no Node.js in the final image) ----
-FROM caddy:2.11.4-alpine
+FROM caddy:2.11.7-alpine
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY --from=build /app/build /srv
