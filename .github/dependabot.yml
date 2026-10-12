@@ -12,7 +12,9 @@ updates:
     directory: /movies-frontend
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    groups:
+      react:
+        patterns: ["react", "react-dom"]   # always bumped together, never split again
 
   - package-ecosystem: github-actions
     directory: /
@@ -23,6 +25,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    groups:
+      dev-services:
+        patterns: ["*"]                     # one PR for all compose images
 
   # Base images in the Dockerfiles (JDK/JRE, Node, Caddy)
   - package-ecosystem: docker
