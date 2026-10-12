@@ -7,7 +7,8 @@ synopsis, ratings, trailers and the best reviews, plus your own reviews.
 
 It is also a learning project. It starts as a small Spring Boot + React CRUD app and grows step by step
 into a production-shaped system: an identity provider, secrets management, TLS, an event pipeline,
-caching, observability, CI and containers. Later it will add AI inference and AI infrastructure.
+caching, observability, CI and containers, and then AI inference: AI-written review digests with
+safety layers, cost controls and an eval. AI infrastructure is next.
 
 ---
 
@@ -36,6 +37,7 @@ flowchart LR
     end
 
     tmdb[(TMDB API)]
+    claude[(Claude API<br/>Anthropic)]
 
     browser -- loads app --> fe
     browser -- login: Authorization Code + PKCE --> kc
@@ -50,22 +52,24 @@ flowchart LR
     be -- cache-aside --> redis
     be -- OTLP metrics + traces --> lgtm
     be -- trending sync at startup --> tmdb
+    be -- review digests, in the background --> claude
 ```
 
 ### What each part does
 
 | Component | Role |
 |---|---|
-| **movies-frontend** (`movies-frontend/`) | React single-page app. It lists the trending movies (hero carousel), shows trailers, and has a page per movie with the synopsis, TMDB viewer reviews and the app's own paged reviews. It signs in through Keycloak with `react-oidc-context` and sends the access token as `Authorization: Bearer`. |
-| **movies-backend** (`movies-backend/`) | Spring Boot REST API (`/api/v1/...`) and an OAuth2 *resource server*: it never sees passwords and only checks tokens. It owns the movie catalogue (synced from TMDB), reviews, the event pipeline and the cache. |
+| **movies-frontend** (`movies-frontend/`) | React single-page app. It lists the trending movies (hero carousel), shows trailers, and has a page per movie with the synopsis, the AI verdict, TMDB viewer reviews and the app's own paged reviews. It signs in through Keycloak with `react-oidc-context` and sends the access token as `Authorization: Bearer`. |
+| **movies-backend** (`movies-backend/`) | Spring Boot REST API (`/api/v1/...`) and an OAuth2 *resource server*: it never sees passwords and only checks tokens. It owns the movie catalogue (synced from TMDB), reviews, the event pipeline, the cache and the AI review digests. |
 | **Keycloak** (`keycloak/`) | Identity provider. It handles login, registration, password policy, brute-force protection and roles (`USER`, `ADMIN`). The realm is code: `keycloak/import/movie-gold-realm.json` is imported on first start. |
-| **MongoDB** | System of record: `movies`, `reviews`, `outbox_events`. It runs as a single-node **replica set**, because multi-document transactions (used by the outbox) need one. |
-| **Kafka** | Event log. Review changes are published to `movies.reviews`. Failed messages go to `movies.reviews-dlt` (dead-letter topic). |
+| **MongoDB** | System of record: `movies`, `reviews`, `outbox_events`, `review_digests`. It runs as a single-node **replica set**, because multi-document transactions (used by the outbox) need one. |
+| **Kafka** | Event log. Review changes are published to `movies.reviews` and consumed by two independent groups: `review-count-projector` (updates `reviewCount`) and `review-digest` (marks the AI digest stale). Failed messages go to `movies.reviews-dlt` (dead-letter topic). |
 | **Redis** | Read cache for movie responses (cache-aside). It is optional at runtime: if Redis is down, the API still answers from MongoDB. |
 | **Vault** | Optional secrets store. With `VAULT_ENABLED=true` the backend logs in with AppRole and reads the Mongo URI and TMDB token from `secret/movies`. Those values are then not needed in `.env`. |
 | **Caddy** (`caddy/`) | Optional TLS reverse proxy (`--profile tls`) in front of the backend, with a locally trusted CA. A second Caddy serves the built frontend inside its container. |
 | **Grafana LGTM** | Development observability stack: an OpenTelemetry collector plus Prometheus (metrics), Tempo (traces), Loki (logs) and Grafana. |
 | **TMDB** | External source of trending movies, details, cast and viewer reviews. It is synced once at startup and on demand by an admin. |
+| **Claude (Anthropic API)** | Writes the review digests (Claude Opus 5.5). Called only by the background refresher and admin endpoints, never on a page load. Optional: without `ANTHROPIC_API_KEY` the AI features are off. |
 
 ### Backend package layout
 
@@ -80,6 +84,7 @@ The backend is split **by feature, not by layer**, and ArchUnit tests enforce th
 | `tmdb` | TMDB client, mapper, startup `TrendingMoviesSync`, admin `POST /api/v1/admin/trending-sync` |
 | `security` | Security filter chain, JWT decoder (issuer + audience checks), `CurrentUser`, per-client rate limiting |
 | `user` | `GET /api/v1/users/me` (who am I, according to the token) |
+| `ai` | Review digests: `DigestModel` / `ClaudeDigestModel` (the only Anthropic SDK code), prompt and safety checks in `ReviewDigestService`, `DigestQueue`, `DigestInvalidator` (Kafka consumer), `DigestRefresher` (scheduled), public and admin endpoints |
 | `common` | Error handling (RFC 9457 `ProblemDetail`), `PageResponse`, `JsonCache`, Mongo transactions, Kafka error handling, OpenAPI config |
 
 ### API
@@ -95,7 +100,10 @@ Keycloak with PKCE.
 | `POST /api/v1/reviews` | `USER` | Write a review. The author comes from the token, never from the body. |
 | `DELETE /api/v1/reviews/{id}` | author or `ADMIN` | Delete a review. Anyone else gets 403. |
 | `GET /api/v1/users/me` | logged in | The caller's id, username and roles |
+| `GET /api/v1/movies/{imdbId}/digest` | anyone | The stored AI digest of the movie's reviews (404 until one exists; never calls the model) |
 | `POST /api/v1/admin/trending-sync` | `ADMIN` | Re-sync trending movies from TMDB now |
+| `POST /api/v1/admin/movies/{imdbId}/digest-preview` | `ADMIN` | Generate a digest now without saving it (one model call) |
+| `POST /api/v1/admin/movies/{imdbId}/digest` | `ADMIN` | Regenerate and store a movie's digest now (one model call) |
 | `GET /actuator/health`, `/actuator/info` | anyone | Liveness/readiness probes |
 | `GET /actuator/**` (metrics, …) | `ADMIN` | Operational endpoints |
 
@@ -219,12 +227,17 @@ The dev users' password is `KEYCLOAK_DEV_USER_PASSWORD` in the root `.env`. Vaul
 
 ```bash
 cd movies-backend
-cp .env.example .env                 # MONGO_URI for local Mongo, or the Atlas values; TMDB_API_TOKEN
+cp .env.example .env                 # MONGO_URI for local Mongo, or the Atlas values; TMDB_API_TOKEN;
+                                     # optional ANTHROPIC_API_KEY for the AI digests
 ./mvnw spring-boot:run
 ```
 
 `.env` is read as a Java properties file (`spring.config.import=optional:file:.env[.properties]`), so use
 `KEY=value` lines with no quotes and no `export`.
+
+AI digests need `ANTHROPIC_API_KEY`. The background refresher that generates them is **off by default**,
+because it spends money without anyone clicking anything: set `AI_DIGEST_REFRESH_ENABLED=true` to run it
+(and `AI_DIGEST_DELAY=30s` to see results quickly). Admins can also generate a digest from Swagger.
 
 ### 3. Frontend
 
@@ -252,9 +265,12 @@ different backend port) in a git-ignored `.env.development.local`.
 
 * **Health:** `/actuator/health/liveness` and `/readiness`, ready for Kubernetes probes.
 * **Metrics:** Micrometer exports to OTLP every 10 s. Besides JVM/HTTP/Kafka metrics there are custom
-  counters for cache hits and misses (`app.cache.requests`) and outbox publishing (`app.outbox.events`).
+  counters for cache hits and misses (`app.cache.requests`), outbox publishing (`app.outbox.events`) and AI
+usage: tokens (`app.ai.tokens`), estimated cost in USD (`app.ai.cost`), model-call latency (`app.ai.model.call`)
+and digest outcomes (`app.ai.digest.regenerate`).
 * **Traces:** Spring's OpenTelemetry starter traces HTTP requests, MongoDB, Redis and Kafka. Trace context
-  travels in Kafka headers, so the trace links the relay's send to the consumer's processing.
+  travels in Kafka headers, so the trace links the relay's send to the consumer's processing. Calls to Claude
+aren't instrumented by Spring, so they're wrapped in an Observation and appear as `claude …` spans.
 * Turn export off with `OBSERVABILITY_EXPORT_ENABLED=false`. Tune sampling with `TRACING_SAMPLING_PROBABILITY`.
 
 ## Testing
@@ -269,6 +285,8 @@ cd movies-backend && ./mvnw verify   # needs Docker running (Testcontainers)
 | Slice (`@WebMvcTest`) | controller tests with mocked services and test JWTs (`TestUsers.jwt()`) |
 | Integration (Testcontainers) | real MongoDB replica set, Kafka and Redis: `MovieApiIntegrationTest`, `ReviewEventsIntegrationTest` (outbox → Kafka → projector, DLT), `MovieCacheIntegrationTest`, `ReviewMovieLinkMigrationIntegrationTest`, `ActuatorSecurityIntegrationTest` |
 | Architecture | `ArchitectureTest` (ArchUnit) |
+| AI pipeline | `ReviewDigestFlowIntegrationTest` (review → Kafka → stale → refresher → stored digest) with a fake `DigestModel`, so no test calls Claude; `ReviewDigestSafetyTest` for the injection guards |
+| Eval (opt-in, paid) | `ReviewDigestEval`: 25 cases against the real model, graded by code and a Claude Sonnet 5.5 judge. Never runs in the normal build or CI; see [evals/review-digest](evals/review-digest/README.md). |
 
 ## CI/CD
 
@@ -291,6 +309,8 @@ Dependabot opens weekly update PRs for Maven, npm, GitHub Actions, the compose i
 ├── caddy/                    TLS reverse proxy config
 ├── movies-backend/           Spring Boot API (+ Dockerfile)
 ├── movies-frontend/          React SPA (+ Dockerfile, Caddyfile)
+├── evals/                    AI eval results, one folder per evaluated feature
+├── docs/adr/                 architecture decision records
 └── .github/                  CI workflow, Dependabot
 ```
 
@@ -300,7 +320,8 @@ Deliberate trade-offs for a single-node development setup, and good next exercis
 
 * **Rate limits are per instance** (in-memory buckets). With several replicas, move them to Redis
   (Bucket4j has a Redis backend).
-* **The outbox relay assumes one instance.** With more, add a lock (e.g. ShedLock) or claim events atomically.
+* **The outbox relay and the digest refresher assume one instance.** With more, add a lock (e.g. ShedLock)
+  or claim work atomically; a second refresher would also pay twice for the same digests.
 * **The relay starts a new trace.** Store the trace context in the outbox event so a review's HTTP request
   and its Kafka processing appear as one trace.
 * **Redis has timeouts but no circuit breaker.** During an outage every request still waits up to 250 ms
@@ -312,6 +333,8 @@ Deliberate trade-offs for a single-node development setup, and good next exercis
   single-broker Kafka, single-node replica set.
 * **No Content-Security-Policy yet** on the frontend.
 * **Frontend config is baked in at build time** (`REACT_APP_*`), so build one image per environment.
+* **The eval's judge misgrades exact counts** ("two of the four reviews"), so improvements to how digests
+  attribute opinions can't be measured yet. Fix the judge before tuning the prompt further.
 
 ---
 
