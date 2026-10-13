@@ -182,8 +182,21 @@ services:
               count: all
               capabilities: [gpu]
 
+  qdrant:
+    image: qdrant/qdrant:v1.19.2
+    # Vector database: stores embeddings and finds the nearest ones quickly (HNSW index)
+    environment:
+      # Qdrant sends anonymous usage statistics by default; this turns them off
+      QDRANT__TELEMETRY_DISABLED: "true"
+    ports:
+      - "16333:6333"   # REST API and web dashboard (/dashboard)
+      - "16334:6334"   # gRPC
+    volumes:
+      - qdrant-data:/qdrant/storage
+
 volumes:
   keycloak-data:
   mongo-data:
   caddy-data:
   hf-cache:
+  qdrant-data:
