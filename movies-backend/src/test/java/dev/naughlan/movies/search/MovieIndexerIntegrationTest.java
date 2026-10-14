@@ -1,6 +1,7 @@
 package dev.naughlan.movies.search;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.never;
@@ -120,6 +121,35 @@ class MovieIndexerIntegrationTest {
         // and rebuilds
         assertThat(indexer.reconcile()).isEqualTo(new MovieIndexer.Result(3, 3, 0));
         assertThat(qdrant.scroll(properties.collection(), List.of("imdbId"))).hasSize(3);
+    }
+
+    @Test
+    void theAliasMovesToANewVersionOnlyOnceItIsComplete() {
+        // Searches currently run against an older index (say, an earlier model)
+        String oldVersion = "movies_old-model_v0";
+        qdrant.deleteCollection(oldVersion);
+        qdrant.createCollection(oldVersion, properties.dimensions());
+        qdrant.switchAlias(properties.alias(), oldVersion, qdrant.aliasTarget(properties.alias()) != null);
+
+        // Building the new version fills it completely, then moves the alias in one
+        // atomic step
+        assertThat(indexer.reconcile()).isEqualTo(new MovieIndexer.Result(3, 3, 0));
+        assertThat(qdrant.aliasTarget(properties.alias())).isEqualTo(properties.collection());
+        // The old version is kept, so rolling back is a single alias switch
+        assertThat(qdrant.collectionExists(oldVersion)).isTrue();
+    }
+
+    @Test
+    void aFailedPassLeavesTheAliasWhereItWas() {
+        String oldVersion = "movies_old-model_v0";
+        qdrant.deleteCollection(oldVersion);
+        qdrant.createCollection(oldVersion, properties.dimensions());
+        qdrant.switchAlias(properties.alias(), oldVersion, qdrant.aliasTarget(properties.alias()) != null);
+        when(embeddings.embedDocuments(anyList())).thenThrow(new IllegalStateException("GPU out of memory"));
+
+        assertThatThrownBy(() -> indexer.reconcile()).isInstanceOf(IllegalStateException.class);
+        // A half-built index never goes live
+        assertThat(qdrant.aliasTarget(properties.alias())).isEqualTo(oldVersion);
     }
 
     private static Movie movie(String imdbId, String title, String overview) {

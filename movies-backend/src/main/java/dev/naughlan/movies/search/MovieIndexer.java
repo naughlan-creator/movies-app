@@ -120,6 +120,15 @@ class MovieIndexer {
             qdrant.delete(collection, removed.stream().map(MovieIndexer::pointId).toList());
         }
 
+
+        // Only reached when the whole pass succeeded, so the collection is complete: now searches may use it.
+        // On a first run this creates the alias; after a model or text change it moves it from the old version.
+        String live = qdrant.aliasTarget(properties.alias());
+        if (!collection.equals(live)) {
+            qdrant.switchAlias(properties.alias(), collection, live != null);
+            log.info("Search alias {} now points to {} (was {})", properties.alias(), collection, live);
+        }
+
         meters.counter("app.search.indexed", "outcome", "embedded").increment(changed.size());
         meters.counter("app.search.indexed", "outcome", "removed").increment(removed.size());
         if (!changed.isEmpty() || !removed.isEmpty()) {
@@ -134,11 +143,6 @@ class MovieIndexer {
             qdrant.createCollection(collection, properties.dimensions());
             qdrant.createKeywordIndex(collection, "genres");
             log.info("Created search collection {}", collection);
-        }
-        // The very first index: point the alias at it. Moving the alias to a NEW
-        // version is a separate step (Part C).
-        if (qdrant.aliasTarget(properties.alias()) == null) {
-            qdrant.switchAlias(properties.alias(), collection, false);
         }
     }
 
