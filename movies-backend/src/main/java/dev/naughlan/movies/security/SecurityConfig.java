@@ -59,7 +59,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // "*" matches exactly one path segment; new sub-paths stay protected by default
                         .requestMatchers(HttpMethod.GET, "/api/v1/movies", "/api/v1/movies/*", "/api/v1/movies/*/reviews",
-                         "/api/v1/movies/*/digest").permitAll()
+                         "/api/v1/movies/*/digest", "/api/v1/movies/*/similar").permitAll()
                         // Sign-up and login happen on Keycloak's pages, so the API has no public write endpoints
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs*", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/error").permitAll()

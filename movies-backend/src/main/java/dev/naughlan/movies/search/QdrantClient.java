@@ -134,10 +134,10 @@ class QdrantClient {
                                 .toBodilessEntity();
         }
 
-        List<ScoredPoint> query(String collection, float[] vector, int limit, Map<String, Object> filter) {
+        List<ScoredPoint> query(String collection, Object query, int limit, Map<String, Object> filter) {
                 Map<String, Object> body = filter == null
-                                ? Map.of("query", vector, "limit", limit, "with_payload", true)
-                                : Map.of("query", vector, "limit", limit, "with_payload", true, "filter", filter);
+                                ? Map.of("query", query, "limit", limit, "with_payload", true)
+                                : Map.of("query", query, "limit", limit, "with_payload", true, "filter", filter);
                 Response<QueryResult> response = restClient.post()
                                 .uri("/collections/{name}/points/query", collection)
                                 .body(body)
