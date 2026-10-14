@@ -1,0 +1,30 @@
+.similar-row{
+    display: flex;
+    gap: 0.8rem;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+}
+.similar-movie{
+    flex: 0 0 120px;
+    color: #ddd;
+    text-decoration: none;
+    font-size: 0.85rem;
+}
+.similar-movie:hover,
+.similar-movie:focus-visible{
+    color: gold;
+}
+.similar-movie img,
+.similar-poster-placeholder{
+    display: block;
+    width: 120px;
+    height: 180px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid #333;
+    margin-bottom: 0.3rem;
+    background: #333;
+}
+.similar-movie:hover img{
+    border-color: gold;
+}

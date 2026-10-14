@@ -8,6 +8,7 @@ import ReviewForm from '../reviewForm/ReviewForm';
 import { formatMeta } from '../../utils/movieFormat';
 import NotFound from '../notFound/NotFound';
 import ReviewDigest from '../reviewDigest/ReviewDigest';
+import SimilarMovies from '../similar/SimilarMovies';
 
 const REVIEWS_PER_PAGE = 10;
 
@@ -43,6 +44,8 @@ const Reviews = ({getMovieData, movie, movieNotFound}) => {
     }, [movieId]);
 
     useEffect(()=>{
+        // Opening another movie from "More like this" should start at the top of its page
+        window.scrollTo(0, 0);
         getMovieData(movieId);
         setReviews([]);
         loadReviews(0);
@@ -218,6 +221,7 @@ const Reviews = ({getMovieData, movie, movieNotFound}) => {
                         </Button>
                     )}
                 </section>
+                <SimilarMovies movieId={movieId} />
             </Col>
         </Row>
     </Container>
