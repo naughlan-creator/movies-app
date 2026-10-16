@@ -1,0 +1,99 @@
+# Settings for the backend pods. Secrets (API keys) live in the backend-secrets Secret, created by hand.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+  namespace: movie-gold
+data:
+  SERVER_PORT: "8080"
+  # The Compose services, reached through the Docker host (see hostAliases below)
+  MONGO_URI: mongodb://host.docker.internal:27017/movies?directConnection=true
+  MONGO_DATABASE: movies
+  KAFKA_BOOTSTRAP_SERVERS: host.docker.internal:39092
+  REDIS_HOST: host.docker.internal
+  REDIS_PORT: "16379"
+  # The issuer must match the token's "iss": the URL the BROWSER used. The keys are fetched via the host.
+  OIDC_ISSUER_URI: http://localhost:18180/realms/movie-gold
+  OIDC_JWK_SET_URI: http://host.docker.internal:18180/realms/movie-gold/protocol/openid-connect/certs
+  OTLP_ENDPOINT: http://host.docker.internal:14318
+  CORS_ALLOWED_ORIGINS: http://localhost:18096
+  SEARCH_ENABLED: "true"
+  EMBEDDINGS_URL: http://host.docker.internal:18086
+  # Qdrant runs in the cluster: its Service name is enough
+  QDRANT_URL: http://qdrant:6333
+  AI_DIGEST_REFRESH_ENABLED: "false"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: movie-gold
+spec:
+  # One for now: the scheduled jobs aren't safe to run twice yet (Part C)
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      # Pods don't know Docker's host names. Map host.docker.internal to Docker Desktop's host address.
+      hostAliases:
+        - ip: "192.168.65.254"
+          hostnames: ["host.docker.internal"]
+      containers:
+        - name: backend
+          image: movie-gold-backend:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: backend-config
+            - secretRef:
+                name: backend-secrets
+          # Spring Boot needs ~20-40 s to start. Until this passes, the other probes wait.
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 3
+            failureThreshold: 40
+          # Not ready = no traffic from the Service (e.g. during startup or shutdown)
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            periodSeconds: 5
+          # Not live = Kubernetes restarts the container
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            # The JVM uses 75% of this for its heap (-XX:MaxRAMPercentage=75 in the Dockerfile)
+            limits:
+              memory: 1536Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: movie-gold
+spec:
+  # NodePort: reachable from outside the cluster on the node's port 30080 (mapped to localhost:18095)
+  type: NodePort
+  selector:
+    app: backend
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      nodePort: 30080
