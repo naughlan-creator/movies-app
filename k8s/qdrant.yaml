@@ -1,0 +1,69 @@
+# Qdrant inside the cluster. A StatefulSet, not a Deployment: the pod keeps a stable name (qdrant-0)
+# and its own disk, which survives restarts and rescheduling.
+apiVersion: v1
+kind: Service
+metadata:
+  name: qdrant
+  namespace: movie-gold
+spec:
+  selector:
+    app: qdrant
+  ports:
+    - name: http
+      port: 6333
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: qdrant
+  namespace: movie-gold
+spec:
+  serviceName: qdrant
+  replicas: 1
+  selector:
+    matchLabels:
+      app: qdrant
+  template:
+    metadata:
+      labels:
+        app: qdrant
+    spec:
+      containers:
+        - name: qdrant
+          image: qdrant/qdrant:v1.19.2
+          env:
+            - name: QDRANT__TELEMETRY_DISABLED
+              value: "true"
+          ports:
+            - name: http
+              containerPort: 6333
+          # Ready = may receive traffic; live = doesn't need restarting
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: http
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+          volumeMounts:
+            - name: storage
+              mountPath: /qdrant/storage
+  # One disk per pod, created automatically and kept when the pod is deleted
+  volumeClaimTemplates:
+    - metadata:
+        name: storage
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
