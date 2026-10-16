@@ -7,7 +7,7 @@
     "@emotion/styled": "^11.14.1",
     "@fortawesome/free-solid-svg-icons": "^7.3.1",
     "@fortawesome/react-fontawesome": "^3.5.0",
-    "@mui/material": "^9.4.0",
+    "@mui/material": "^9.5.0",
     "axios": "^1.20.0",
     "bootstrap": "^5.3.8",
     "oidc-client-ts": "3.5.0",
