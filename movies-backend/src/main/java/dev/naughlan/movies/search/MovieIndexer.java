@@ -23,6 +23,7 @@ import dev.naughlan.movies.ai.StoredDigest;
 import dev.naughlan.movies.movie.Movie;
 import dev.naughlan.movies.movie.MovieRepository;
 import io.micrometer.core.instrument.MeterRegistry;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 
 @Component
 class MovieIndexer {
@@ -53,6 +54,7 @@ class MovieIndexer {
     }
 
     @Scheduled(fixedDelayString = "${app.search.reconcile-interval:5m}", initialDelayString = "${app.search.reconcile-initial-delay:30s}")
+    @SchedulerLock(name = "search-index-reconciler", lockAtMostFor = "PT15M")
     void scheduledReconcile() {
         if (!properties.enabled()) {
             return;

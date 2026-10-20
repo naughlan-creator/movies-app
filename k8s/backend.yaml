@@ -29,8 +29,8 @@ metadata:
   name: backend
   namespace: movie-gold
 spec:
-  # One for now: the scheduled jobs aren't safe to run twice yet (Part C)
-  replicas: 1
+  # Safe to run several: scheduled jobs take a ShedLock lock
+  replicas: 2
   selector:
     matchLabels:
       app: backend
@@ -45,7 +45,7 @@ spec:
           hostnames: ["host.docker.internal"]
       containers:
         - name: backend
-          image: movie-gold-backend:0.1.0
+          image: movie-gold-backend:0.2.0
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

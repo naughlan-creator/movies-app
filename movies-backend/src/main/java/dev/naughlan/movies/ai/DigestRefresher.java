@@ -9,6 +9,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import dev.naughlan.movies.movie.MovieRepository;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 
 /**
  * The only place that spends money on its own. Guardrails: off by default, a delay to batch bursts of
@@ -37,6 +38,7 @@ class DigestRefresher {
 
     // fixedDelay: the next run starts a minute after this one FINISHES, so runs never overlap
     @Scheduled(fixedDelayString = "${app.ai.digest.refresh-interval:1m}")
+    @SchedulerLock(name = "digest-refresher", lockAtMostFor = "PT15M")
     void refresh() {
         if (!properties.digest().refreshEnabled() || !properties.hasApiKey()) {
             return;

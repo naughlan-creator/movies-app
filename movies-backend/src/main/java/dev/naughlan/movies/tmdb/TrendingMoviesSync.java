@@ -17,6 +17,7 @@ import org.springframework.web.client.RestClientException;
 
 import dev.naughlan.movies.movie.Movie;
 import dev.naughlan.movies.movie.MovieCache;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 
 /**
  * On every startup, replaces the "trending this week" list with fresh data from TMDB.
@@ -44,6 +45,7 @@ public class TrendingMoviesSync {
 
     // ApplicationReadyEvent fires once the web server is up, so a slow TMDB doesn't delay startup
     @EventListener(ApplicationReadyEvent.class)
+    @SchedulerLock(name = "tmdb-trending-sync", lockAtLeastFor = "PT5M", lockAtMostFor = "PT10M")
     public void syncOnStartup() {
         if (!properties.hasApiToken()) {
             log.warn("TMDB_API_TOKEN is not set; skipping trending sync and serving movies already in the database");

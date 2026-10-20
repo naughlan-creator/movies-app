@@ -22,6 +22,7 @@ import org.springframework.stereotype.Component;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 
 /**
  * Publishes outbox events to Kafka, oldest first, and marks them published.
@@ -60,6 +61,7 @@ class OutboxRelay {
     }
 
     @Scheduled(fixedDelayString = "${app.outbox.poll-interval:1s}")
+    @SchedulerLock(name = "outbox-relay", lockAtMostFor = "PT1M")
     void publishPending() {
         Query pending = Query.query(Criteria.where("publishedAt").is(null))
                 .with(Sort.by("createdAt"))
