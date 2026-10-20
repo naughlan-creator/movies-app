@@ -196,6 +196,41 @@ services:
     volumes:
       - qdrant-data:/qdrant/storage
 
+  llm:
+    # vLLM: an OpenAI-compatible server for open models (continuous batching, paged KV cache)
+    image: vllm/vllm-openai:v0.32.0
+    # Opt-in like the embedding server: needs an NVIDIA GPU.
+    profiles: ["gpu"]
+    command:
+      - "--model"
+      - "Qwen/Qwen3-4B-Instruct-2507-FP8"
+      # The name clients use in requests
+      - "--served-model-name"
+      - "qwen3-4b"
+      # At most 60% of the card (~9.8 GB) for weights + KV cache, leaving room for the embedding server
+      - "--gpu-memory-utilization"
+      - "0.6"
+      # Longest prompt + answer accepted. It bounds how much KV cache one request can need.
+      - "--max-model-len"
+      - "8192"
+      # CUDA-graph capture crashes under WSL2 (Docker Desktop on Windows). Eager mode skips
+      # torch.compile and CUDA graphs: a little slower per token, but it starts reliably.
+      - "--enforce-eager"
+    ports:
+      - "18087:8000"
+    # The same model cache as the embedding server: both using Hugging Face's cache layout
+    volumes:
+      - hf-cache:/root/.cache/huggingface/hub
+    # vLLM's workers share memory with each other; Docker's 64 MB default is far too small
+    shm_size: 4gb
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: ["gpu"]
+
 volumes:
   keycloak-data:
   mongo-data:
