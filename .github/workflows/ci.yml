@@ -19,7 +19,10 @@ concurrency:
 jobs:
   backend:
     name: Backend - build and test
-    runs-on: ubuntu-latest
+    # MongoDB 8.0 refuses to start on Linux kernel 6.19+ (SERVER-121912), which ubuntu-24.04
+    # runners moved to in October 2026. 22.04 runners stay on an older kernel.
+    # Move back to ubuntu-latest once MongoDB ships a fix.
+    runs-on: ubuntu-22.04
     defaults:
       run:
         working-directory: movies-backend
