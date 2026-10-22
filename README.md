@@ -8,7 +8,8 @@ synopsis, ratings, trailers and the best reviews, plus your own reviews.
 It is also a learning project. It starts as a small Spring Boot + React CRUD app and grows step by step
 into a production-shaped system: an identity provider, secrets management, TLS, an event pipeline,
 caching, observability, CI and containers, and then AI inference: AI-written review digests with
-safety layers, cost controls and an eval. AI infrastructure is next.
+safety layers, cost controls and an eval, and then AI infrastructure: semantic search on self-hosted
+embeddings, Kubernetes, and a self-hosted LLM measured against Claude.
 
 ---
 
@@ -84,8 +85,9 @@ The backend is split **by feature, not by layer**, and ArchUnit tests enforce th
 | `tmdb` | TMDB client, mapper, startup `TrendingMoviesSync`, admin `POST /api/v1/admin/trending-sync` |
 | `security` | Security filter chain, JWT decoder (issuer + audience checks), `CurrentUser`, per-client rate limiting |
 | `user` | `GET /api/v1/users/me` (who am I, according to the token) |
-| `ai` | Review digests: `DigestModel` / `ClaudeDigestModel` (the only Anthropic SDK code), prompt and safety checks in `ReviewDigestService`, `DigestQueue`, `DigestInvalidator` (Kafka consumer), `DigestRefresher` (scheduled), public and admin endpoints |
-| `common` | Error handling (RFC 9457 `ProblemDetail`), `PageResponse`, `JsonCache`, Mongo transactions, Kafka error handling, OpenAPI config |
+| `ai` | Review digests: `DigestModel` with `ClaudeDigestModel` (the only Anthropic SDK code) or `OpenModelDigestModel` (self-hosted, via vLLM), prompt and safety checks in `ReviewDigestService`, `DigestQueue`, `DigestInvalidator` (Kafka consumer), `DigestRefresher` (scheduled), public and admin endpoints |
+| `search` | Semantic search: `EmbeddingClient` / `TeiEmbeddingClient`, `QdrantClient`, `MovieDocument` (the text that gets embedded), `MovieIndexer` (reconciliation + alias switch), `SearchService`, `SearchController` |
+| `common` | Error handling (RFC 9457 `ProblemDetail`), `PageResponse`, `JsonCache`, Mongo transactions, Kafka error handling, OpenAPI config, ShedLock |
 
 ### API
 
@@ -100,6 +102,8 @@ Keycloak with PKCE.
 | `POST /api/v1/reviews` | `USER` | Write a review. The author comes from the token, never from the body. |
 | `DELETE /api/v1/reviews/{id}` | author or `ADMIN` | Delete a review. Anyone else gets 403. |
 | `GET /api/v1/users/me` | logged in | The caller's id, username and roles |
+| `GET /api/v1/movies/search?q&limit` | anyone | Semantic search: movies matching a description in your own words (503 if search is off or down) |
+| `GET /api/v1/movies/{imdbId}/similar?limit` | anyone | The movies nearest to this one in the search index |
 | `GET /api/v1/movies/{imdbId}/digest` | anyone | The stored AI digest of the movie's reviews (404 until one exists; never calls the model) |
 | `POST /api/v1/admin/trending-sync` | `ADMIN` | Re-sync trending movies from TMDB now |
 | `POST /api/v1/admin/movies/{imdbId}/digest-preview` | `ADMIN` | Generate a digest now without saving it (one model call) |
@@ -211,6 +215,10 @@ some ports look unusual.
 | 19443 | Caddy HTTPS → backend (`--profile tls`) |
 | 13000 | Grafana (admin / admin) |
 | 14317 / 14318 | OTLP gRPC / HTTP |
+| 18086 | Embedding server, TEI (`--profile gpu`) |
+| 18087 | LLM server, vLLM (`--profile gpu`) |
+| 16333 / 16334 | Qdrant REST / gRPC |
+| 18095 / 18096 | Backend / frontend on the kind cluster |
 
 ### 1. Platform services
 
@@ -286,7 +294,9 @@ cd movies-backend && ./mvnw verify   # needs Docker running (Testcontainers)
 | Integration (Testcontainers) | real MongoDB replica set, Kafka and Redis: `MovieApiIntegrationTest`, `ReviewEventsIntegrationTest` (outbox → Kafka → projector, DLT), `MovieCacheIntegrationTest`, `ReviewMovieLinkMigrationIntegrationTest`, `ActuatorSecurityIntegrationTest` |
 | Architecture | `ArchitectureTest` (ArchUnit) |
 | AI pipeline | `ReviewDigestFlowIntegrationTest` (review → Kafka → stale → refresher → stored digest) with a fake `DigestModel`, so no test calls Claude; `ReviewDigestSafetyTest` for the injection guards |
-| Eval (opt-in, paid) | `ReviewDigestEval`: 25 cases against the real model, graded by code and a Claude Sonnet 5.5 judge. Never runs in the normal build or CI; see [evals/review-digest](evals/review-digest/README.md). |
+| Search | `MovieIndexerIntegrationTest`, `SearchIntegrationTest` (real Qdrant, fake embeddings), `SearchControllerTest` |
+| Replicas | `SchedulerLockIntegrationTest`: the same job started twice at once does the work once |
+| Eval (opt-in, paid) | `ReviewDigestEval`: 25 cases against the real model, graded by code and a Claude Sonnet 5.5 judge. Never runs in the normal build or CI; see [evals/review-digest](evals/review-digest/README.md). `RetrievalEval` (opt-in, free, needs TEI) measures search quality. |
 
 ## CI/CD
 
@@ -302,11 +312,12 @@ Dependabot opens weekly update PRs for Maven, npm, GitHub Actions, the compose i
 
 ```
 .
-├── docker-compose.yml        platform services (+ "tls" and "app" profiles)
+├── docker-compose.yml        platform services (+ "tls", "app" and "gpu" profiles)
 ├── .env.example              compose secrets template (copy to .env)
 ├── keycloak/                 realm-as-code + dev user script
 ├── vault/                    dev secrets seeding script (AppRole + policy)
 ├── caddy/                    TLS reverse proxy config
+├── k8s/                      kind cluster + kustomize manifests (backend, frontend, Qdrant)
 ├── movies-backend/           Spring Boot API (+ Dockerfile)
 ├── movies-frontend/          React SPA (+ Dockerfile, Caddyfile)
 ├── evals/                    AI eval results, one folder per evaluated feature
@@ -320,8 +331,6 @@ Deliberate trade-offs for a single-node development setup, and good next exercis
 
 * **Rate limits are per instance** (in-memory buckets). With several replicas, move them to Redis
   (Bucket4j has a Redis backend).
-* **The outbox relay and the digest refresher assume one instance.** With more, add a lock (e.g. ShedLock)
-  or claim work atomically; a second refresher would also pay twice for the same digests.
 * **The relay starts a new trace.** Store the trace context in the outbox event so a review's HTTP request
   and its Kafka processing appear as one trace.
 * **Redis has timeouts but no circuit breaker.** During an outage every request still waits up to 250 ms
@@ -458,20 +467,193 @@ cd movies-backend
 
 ### Limitations
 
-* Two backend instances would both run the refresher and pay twice for the same digests; it needs a lock
-  (e.g. ShedLock), like the outbox relay.
 * The cost metric prices every call at Opus rates, even when a refusal fallback answered.
 * The eval's judge isn't reliable on exact counts, so attribution improvements can't be measured yet.
 
 ## AI infrastructure (Phase 5)
 
-> 🚧 **To be written together while we build it.**
+Phase 4 bought intelligence from an API. Phase 5 runs it ourselves: an embedding model and a vector database
+for semantic search, Kubernetes for running the backend as several replicas, and a self-hosted LLM compared
+with Claude on the Phase 4 eval. Everything model-related runs on one consumer GPU (RTX 5080, 16 GB) and is
+**opt-in**: without the `gpu` compose profile the app works as before, minus search.
 
-<!--
-Ideas to cover when we get here:
-- Serving models (self-hosted vs. managed), GPUs, batching
-- Embeddings + vector store, RAG pipeline
-- Deployment (Kubernetes), autoscaling, model/version rollout
-- Observability for LLM calls (tokens, latency, cost, traces)
-- Evaluation pipeline in CI
--->
+### What it does
+
+* **Semantic search.** The header's search box takes a description in your own words ("a heist that goes
+  wrong", "something cosy for a rainy Sunday") and returns the movies whose meaning matches, not just
+  their keywords.
+* **Similar movies.** Every movie page lists the movies nearest to it in the same vector space.
+* **A second digest model.** `app.ai.provider=open-model` makes a self-hosted Qwen3-4B write the review
+  digests instead of Claude, with no other change to the app.
+
+### How search works
+
+```
+   MongoDB movies ──► MovieIndexer (every 5 min, ShedLock) ──► TEI: Qwen3-Embedding-0.6B ──► Qdrant
+      (truth)           compares SHA-256 content hashes            1024-dim vectors           (index)
+
+   "a heist that goes wrong" ──► SearchService ──► TEI (query + instruction) ──► Qdrant top-k
+                                                                                   │
+                                     movie cards ◄── MongoDB (by imdbId) ◄─────────┘
+```
+
+* **Documents.** `MovieDocument` turns a movie into the text that gets embedded: title, year, genres,
+  overview and, when one exists, its review digest. It's built the same way in the indexer and the eval.
+* **Embeddings.** [Text Embeddings Inference](https://github.com/huggingface/text-embeddings-inference)
+  serves Qwen3-Embedding-0.6B. Documents go in batches (one GPU pass for 32 texts instead of 32).
+  Queries get a task instruction in front, which this model is trained to use.
+* **Vector store.** [Qdrant](https://qdrant.tech) stores one point per movie, with an HNSW index for
+  approximate nearest-neighbour search and the imdbId, title and genres as payload. Point ids are UUIDs
+  derived from the imdbId, so re-indexing a movie replaces its point instead of adding a duplicate.
+* **Reconciliation, not dual writes.** MongoDB is the source of truth and Qdrant is a derived index.
+  The indexer doesn't hook into every write. Every 5 minutes it compares a SHA-256 hash of each movie's
+  document text with the hash stored in Qdrant: it embeds only new or changed movies and deletes removed
+  ones. A failed pass loses nothing, because the next pass compares again.
+* **Blue/green re-indexing.** Searches go through the alias `movies`, never a collection name. The
+  collection name includes the model and a version (`movies_qwen3-embedding-0.6b_v1`). A new model or a
+  new document format means a new collection: the indexer fills it completely, then moves the alias in
+  one atomic step. Searches never see a half-built index.
+* **Results come from MongoDB.** Qdrant returns ids and scores. The movie cards are read from MongoDB,
+  so search never shows stale titles or posters.
+* **When search is down.** If TEI or Qdrant is unreachable, search answers `503` and the rest of the app
+  keeps working. Search is off unless `SEARCH_ENABLED=true`.
+
+### Running on Kubernetes
+
+`k8s/` runs the app on a local [kind](https://kind.sigs.k8s.io) cluster: the backend as **2 replicas**,
+the frontend, and Qdrant. The platform services (Keycloak, MongoDB, Kafka, Redis, TEI, observability)
+stay in Docker Compose and are reached through `host.docker.internal`.
+
+| Concept | Where |
+|---|---|
+| StatefulSet + PersistentVolumeClaim | `qdrant.yaml`: a stable name (`qdrant-0`) and a disk that survives the pod (tested: delete the pod, the data is still there) |
+| Deployment, rolling update | `backend.yaml`, `frontend.yaml`: new pods must be ready before old ones stop, so a deploy has no downtime |
+| Probes | readiness (`/actuator/health/readiness`: send it traffic?) and liveness (`/actuator/health/liveness`: restart it?); a startup probe gives the slow Spring boot time before liveness counts |
+| Requests and limits | CPU and memory requests for scheduling; a memory limit only, because a CPU limit throttles the JVM |
+| ConfigMap and Secret | settings in `backend-config`; keys in `backend-secrets`, created from `.env` by `kubectl`, never written to a file |
+| NodePort + kind port mappings | backend on `localhost:18095`, frontend on `localhost:18096` |
+
+```bash
+kind create cluster --config k8s/kind-cluster.yaml
+docker build -t movie-gold-backend:0.2.0 movies-backend
+docker build -t movie-gold-frontend:0.1.0 --build-arg REACT_APP_API_BASE_URL=http://localhost:18095 movies-frontend
+kind load docker-image movie-gold-backend:0.2.0 movie-gold-frontend:0.1.0 --name movie-gold
+kubectl create secret generic backend-secrets -n movie-gold --from-env-file=movies-backend/.env
+kubectl apply -k k8s/
+```
+
+Create the namespace first (`kubectl apply -f k8s/namespace.yaml`) if the secret command complains that
+it doesn't exist.
+
+**Scheduled jobs with replicas.** Every replica runs every `@Scheduled` job, so two outbox relays would
+publish the same events twice, and two digest refreshers would pay twice for the same digests.
+[ShedLock](https://github.com/lukas-krecan/ShedLock) puts a named lock in MongoDB (`shedLock`
+collection): the replica that gets it runs the job, and the others skip that run. The four jobs (outbox
+relay, digest refresher, search reconciler, trending sync at startup) each have their own lock.
+`SchedulerLockIntegrationTest` starts the same job twice at once and checks that the work happens once.
+
+### Self-hosted LLM
+
+`docker compose --profile gpu up -d llm` serves **Qwen3-4B-Instruct-2507** (FP8 weights, Apache 2.0)
+with [vLLM](https://docs.vllm.ai) on an OpenAI-compatible API at `localhost:18087`. vLLM's speed comes from
+two ideas:
+* **Paged KV cache.** The per-token intermediate results are stored in small pages, so little VRAM is
+  wasted and many requests fit at once.
+* **Continuous batching.** Every decode step reads all the weights anyway, so many requests can share one
+  read. vLLM adds and removes requests from the batch at every step.
+
+Measured on the RTX 5080, warm, with about 230-token answers:
+
+| Concurrent requests | Total throughput | Time per request |
+|---|---|---|
+| 1 | 40 tokens/s | 6.1 s |
+| 4 | 114 tokens/s | 7.4 s |
+| 16 | 547 tokens/s | 6.5 s |
+| 32 | 933 tokens/s | 7.3 s |
+
+Time to first token was 58 ms. Throughput rises **23×** from 1 to 32 requests while each request barely
+slows down: one user can't keep a GPU busy, and batching is what makes self-hosting affordable.
+
+`OpenModelDigestModel` implements the same `DigestModel` interface as `ClaudeDigestModel`:
+* The JSON Schema of `ReviewDigest` goes in `response_format`. vLLM compiles it into a grammar and masks
+  every token that would break it, so the answer always parses.
+* The schema is also added to the prompt. The grammar fixes the **shape** but tells the model nothing about
+  what each field means.
+* `finish_reason: length` is treated like Claude's `max_tokens`: no digest rather than broken JSON.
+
+Running a model yourself also means fixing what an API provider fixes for you:
+
+| Problem | Fix |
+|---|---|
+| The first start downloads ~5 GB of weights | A shared `hf-cache` volume for TEI and vLLM |
+| CUDA-graph capture crashes under WSL2 | `--enforce-eager`: slower per token, but it starts reliably |
+| The JSON grammar allowed any whitespace, and the model sometimes wrote newlines until `max_tokens` (3 of 12 calls) | `--structured-outputs-config` with `disable_any_whitespace` |
+| The first request after a start took 46 s | Send a warm-up request before measuring (or before taking traffic) |
+| vLLM, the compose stack, kind and the test containers exhausted Windows' memory commit limit and crashed the WSL VM | Cap WSL's memory in `.wslconfig` and run only what's needed |
+
+### Build vs buy
+
+The digest eval from Phase 4 compared the two models with one variable changed: the same 25 cases × 2
+repetitions, the same prompt, the same checks and the same Claude Sonnet judge. The success rule was set
+before the run.
+
+| | Claude Opus 5.5 (API) | Qwen3-4B (vLLM, own GPU) |
+|---|---|---|
+| Sentiment | 100% | 68% (never answers UNKNOWN for too few reviews) |
+| Grounded | 66% (52–78) | 46% (33–60) |
+| Coverage | 98% | 88% |
+| Safe / no forbidden text | 100% / 100% | 98% / 98% (one digest with too many items, rejected by the checks) |
+| Latency p50 / p95 | 3.7 s / 6.9 s | 2.1 s / 5.4 s |
+| Cost | ~$0.008 per digest | No per-token fee; a GPU that's always on, ~10 GB of VRAM and the operations work above |
+
+Qwen3-4B missed every quality threshold. Prompt injections never got a link into its digests, but they
+still bent what it wrote. **Claude stays the digest model.** The open model stays in the code, tested and
+switched off, for the next comparison. The reasoning, and what would change the decision, are in
+[ADR 0002](docs/adr/0002-claude-over-self-hosted-model-for-review-digests.md). Full results:
+[evals/review-digest](evals/review-digest/README.md).
+
+### Evaluation: search
+
+`RetrievalEval` (opt-in, free, needs TEI) indexes a fixed catalogue of 30 movies with the real
+`MovieDocument` text into a Testcontainers Qdrant and runs 24 queries with hand-labelled relevant movies:
+
+| Variant | Recall@5 | MRR |
+|---|---|---|
+| baseline (query instruction on) | 0.93 | 0.95 |
+| no-instruction | 0.92 | 0.90 |
+
+The instruction barely changes whether the right movies make the top 5, but it ranks them higher (MRR
+0.95 vs 0.90). Plot and paraphrase queries were perfect. Mood and negation queries ("a comedy that isn't
+romantic") are the weak spots, as expected for embeddings, which match meaning but don't understand "not".
+
+```bash
+cd movies-backend
+./mvnw test "-Dtest=RetrievalEval" "-Deval=true"
+./mvnw test "-Dtest=ReviewDigestEval#run" "-Deval=true" "-Dapp.ai.provider=open-model" "-Deval.variant=qwen3-4b"
+```
+
+### Configuration
+
+| Property | Env var | Default | Notes |
+|---|---|---|---|
+| `app.search.enabled` | `SEARCH_ENABLED` | `false` | Search endpoints and the indexer |
+| `app.search.embeddings-url` | `EMBEDDINGS_URL` | `http://localhost:18086` | TEI |
+| `app.search.qdrant-url` | `QDRANT_URL` | `http://localhost:16333` | Qdrant's REST port |
+| `app.search.alias`, `app.search.collection` | – | `movies`, `movies_qwen3-embedding-0.6b_v1` | Change the collection to re-index into a new one (blue/green) |
+| `app.search.dimensions`, `app.search.batch-size` | – | `1024`, `32` | Must match the model; texts per embedding request |
+| `app.search.reconcile-interval` | – | `5m` | How often the index is compared with MongoDB |
+| `app.ai.provider` | `AI_PROVIDER` | `claude` | `open-model` = digests from the self-hosted model |
+| `app.ai.open-model.base-url` | `OPEN_MODEL_URL` | `http://localhost:18087` | vLLM's OpenAI-compatible API |
+| `app.ai.open-model.model`, `.max-tokens`, `.timeout` | – | `qwen3-4b`, `1024`, `60s` | Prompt + max-tokens must fit vLLM's `--max-model-len 8192` |
+
+### Limitations
+
+* **One GPU, one machine.** TEI and vLLM run in Docker Compose, not in the cluster. Kubernetes would need
+  a GPU node with the NVIDIA device plugin, and autoscaling on queue length or GPU use rather than CPU.
+* **The cost metric prices every call at Claude's rates**, even when the open model answers.
+* **Search quality is measured on 24 queries.** That's enough to compare variants, not to give precise
+  numbers; negation and mood queries need more cases (or a re-ranker) before they can be improved.
+* **The open model's quality is only known as of this eval.** Its unit tests run in every build, but a
+  model or prompt change needs a new eval run.
+* **The evals run by hand.** A CI job could run `RetrievalEval` on every change to the search code, with a
+  GPU runner or a CPU build of TEI.
