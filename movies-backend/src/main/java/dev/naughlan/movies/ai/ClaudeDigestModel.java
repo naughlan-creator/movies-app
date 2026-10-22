@@ -2,6 +2,7 @@ package dev.naughlan.movies.ai;
 
 import java.time.Duration;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import com.anthropic.client.AnthropicClient;
@@ -19,6 +20,8 @@ import io.micrometer.observation.ObservationRegistry;
  * Anthropic SDK's message API.
  */
 @Component
+// The default: used unless app.ai.provider says otherwise
+@ConditionalOnProperty(name = "app.ai.provider", havingValue = "claude", matchIfMissing = true)
 class ClaudeDigestModel implements DigestModel {
 
     private final AnthropicClient client;

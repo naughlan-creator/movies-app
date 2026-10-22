@@ -216,6 +216,10 @@ services:
       # CUDA-graph capture crashes under WSL2 (Docker Desktop on Windows). Eager mode skips
       # torch.compile and CUDA graphs: a little slower per token, but it starts reliably.
       - "--enforce-eager"
+      # The JSON grammar allows any whitespace between tokens, and the 4B model sometimes emits newlines until
+      # max_tokens (3 of 12 calls in 5.9). Compact JSON only.
+      - "--structured-outputs-config"
+      - '{"backend":"xgrammar","disable_any_whitespace":true}'
     ports:
       - "18087:8000"
     # The same model cache as the embedding server: both using Hugging Face's cache layout
