@@ -24,6 +24,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClientResponseException;
 
 import com.anthropic.client.AnthropicClient;
 import com.anthropic.errors.AnthropicIoException;
@@ -278,10 +280,11 @@ class ReviewDigestEval {
     }
 
     private static String failureClass(RuntimeException e) {
-        if (e instanceof AnthropicIoException) {
+        // Claude's SDK or the open model's RestClient: the same two kinds of breakage
+        if (e instanceof AnthropicIoException || e instanceof ResourceAccessException) {
             return "timeout_or_network";
         }
-        if (e instanceof AnthropicServiceException) {
+        if (e instanceof AnthropicServiceException || e instanceof RestClientResponseException) {
             return "api_error";
         }
         return "harness_error";
@@ -303,6 +306,17 @@ class ReviewDigestEval {
             double p = rows.stream().mapToInt(r -> r.get("grade").get(metric).asInt()).average().orElse(0);
             System.out.printf("%-13s %s%n", metric, withInterval(p, Math.max(1, rows.size())));
         }
+
+        // Speed and length: the other half of comparing two models
+        double[] latencies = rows.stream().filter(r -> r.has("latency_s"))
+                .mapToDouble(r -> r.get("latency_s").asDouble()).sorted().toArray();
+        if (latencies.length > 0) {
+            System.out.printf("latency       p50 %.1f s, p95 %.1f s%n", latencies[latencies.length / 2],
+                    latencies[(int) Math.ceil(latencies.length * 0.95) - 1]);
+        }
+        System.out.printf("output tokens %.0f on average%n", rows.stream().filter(r -> r.has("usage"))
+                .mapToLong(r -> r.get("usage").get("output_tokens").asLong()).average().orElse(0));
+
         // Per label, so "always POSITIVE" can't hide behind the 12 POSITIVE cases
         Map<String, List<JsonNode>> byLabel = rows.stream()
                 .collect(Collectors.groupingBy(r -> r.get("meta").get("expected").asString()));
