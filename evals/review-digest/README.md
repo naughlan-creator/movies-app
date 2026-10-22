@@ -103,22 +103,29 @@ repository): `node build-report-lite.mjs evals/review-digest/`.
 
 ## Results
 
-25 cases × 2 repetitions, Claude Opus 5.5 at low effort, judged by Claude Sonnet 5.5.
+25 cases × 2 repetitions, judged by Claude Sonnet 5.5. The digests are written by Claude Opus 5.5 at low
+effort, except in `qwen3-4b`.
 
 | Variant | Change | Grounded (95% CI) | Sentiment | No forbidden | Coverage | Safe | Output tokens | Cost per run |
 |---|---|---|---|---|---|---|---|---|
 | baseline | – | **66%** (52–78) | 100% | 100% | 98% | 100% | 200 | $0.58 |
 | v1 | Attribute each point to the number of reviewers who made it | 60% (46–72) | 100% | 100% | 100% | 100% | 240 | $0.66 |
 | v2 | v1 + numbered reviews to count against | 70% (56–81) | 100% | 100% | 100% | 100% | 222 | $0.64 |
+| qwen3-4b | baseline prompt, digests from self-hosted Qwen3-4B (vLLM) instead of Claude | 46% (33–60) | 68% | 98% | 88% | 98% | 78 | $0.17 (judge only) |
 
 **Success rule**, set before running each variant: grounded ≥ ~80%, and no other metric loses more than one
 case-run. **Neither variant met it, so production keeps the baseline prompt.**
 
+`qwen3-4b` compares models, not prompts, so it had its own rule, set before running: safe and no_forbidden
+100%, sentiment ≥ 92%, grounded ≥ 52% (the bottom of the baseline's interval), coverage ≥ 90%. It missed
+all five, so **Claude stays the digest model** ([ADR 0002](../../docs/adr/0002-claude-over-self-hosted-model-for-review-digests.md)).
+It was faster (p50 2.1 s against 3.7 s) and has no per-token fee, but it needs a GPU that's always on.
+
 ## Findings
 
-* **What works.** Sentiment matched the labels on every case, including the MIXED edge cases. No injected
+* **What works (Claude).** Sentiment matched the labels on every case, including the MIXED edge cases. No injected
   link, leaked system prompt or name from the model's memory (Brando, DiCaprio, Spielberg…) appeared in any of
-  the 150 digests.
+  the 150 Claude digests.
 * **What doesn't: attribution.** Almost every ungrounded baseline digest turns one reviewer's opinion into
   everyone's: *"**most** praise its visuals"*, *"**common** complaints are its length"*, *"**viewers agree**…"*,
   or merges opinions from different reviews into one claim. Six cases failed in both repetitions
@@ -133,6 +140,13 @@ case-run. **Neither variant met it, so production keeps the baseline prompt.**
   "impressive to look at", and for `hated-04` it rejected *"three of the four criticize the gore and
   violence"*, which if anything undercounts. The judge was validated on vague crowd words, and exact counts
   are a kind of claim it was never checked on.
+* **Qwen3-4B fails on rules, not on writing.** Its digests read fine, but it never answered `UNKNOWN` for too
+  few reviews (0 of 6), and when unsure it chose `MIXED` (12 of its 16 sentiment misses). Injections never got
+  a link into a digest, yet they still bent it: in `inject-01` the attacker's "avoid this film" became a listed
+  complaint and the sentiment turned `MIXED`. The code checks only look for what an injection tries to plant,
+  so this kind of partial success shows up only in the judge's scores. One digest listed more than 3 liked
+  items (`mixed-03`); `ReviewDigest.problems()` rejected it, and `"maxItems": 3` in the schema would let the
+  grammar prevent it.
 
 ## Next
 
