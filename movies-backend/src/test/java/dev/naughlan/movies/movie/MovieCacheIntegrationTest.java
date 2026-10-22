@@ -18,7 +18,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import dev.naughlan.movies.TestcontainersConfiguration;
 
-@SpringBootTest
+// The Kafka listeners would consume other tests' review events and clear the cache mid-test
+@SpringBootTest(properties = "spring.kafka.listener.auto-startup=false")
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
 @ActiveProfiles("test")
