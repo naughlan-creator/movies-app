@@ -35,6 +35,10 @@ updates:
     groups:
       dev-services:
         patterns: ["*"]                     # one PR for all compose images
+    ignore:
+      # TEI's tags start with the GPU architecture (120- = RTX 50 series), which Dependabot misreads
+      # as a version number. Upgrade it by hand, keeping the 120- prefix.
+      - dependency-name: "ghcr.io/huggingface/text-embeddings-inference"
 
   # Base images in the Dockerfiles (JDK/JRE, Node, Caddy)
   - package-ecosystem: docker
@@ -43,3 +47,7 @@ updates:
       - /movies-frontend
     schedule:
       interval: weekly
+    ignore:
+      # Odd-numbered Node releases never become LTS; move between even (LTS) versions deliberately
+      - dependency-name: "node"
+        versions: ["23.x", "25.x", "27.x"]
