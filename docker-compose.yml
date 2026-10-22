@@ -166,7 +166,7 @@ services:
   embeddings:
     # Text Embeddings Inference. The "120-" prefix means built for compute capability 12.0 (RTX 50 series).
     # Other GPUs need another tag: 89- for RTX 40, 86- for RTX 30, cpu- for no GPU.
-    image: ghcr.io/huggingface/text-embeddings-inference:121-1.9.4
+    image: ghcr.io/huggingface/text-embeddings-inference:120-1.9.4
     # Opt-in: needs an NVIDIA GPU. docker compose --profile gpu up -d embeddings
     profiles: ["gpu"]
     command: ["--model-id", "Qwen/Qwen3-Embedding-0.6B"]
