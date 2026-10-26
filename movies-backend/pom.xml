@@ -31,7 +31,7 @@
     <properties>
         <java.version>25</java.version>
         <!-- Spring Cloud 2025.1.x supports Spring Boot 4.0/4.1 (4.1 from 2025.1.2) -->
-        <spring-cloud.version>2025.1.3</spring-cloud.version>
+        <spring-cloud.version>2025.1.4</spring-cloud.version>
         <shedlock.version>7.10.1</shedlock.version>
     </properties>
     <dependencyManagement>
