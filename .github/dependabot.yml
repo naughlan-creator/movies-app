@@ -38,7 +38,7 @@ updates:
     ignore:
       # TEI's tags start with the GPU architecture (120- = RTX 50 series), which Dependabot misreads
       # as a version number. Upgrade it by hand, keeping the 120- prefix.
-      - dependency-name: "ghcr.io/huggingface/text-embeddings-inference"
+      - dependency-name: "*text-embeddings-inference"
 
   # Base images in the Dockerfiles (JDK/JRE, Node, Caddy)
   - package-ecosystem: docker
