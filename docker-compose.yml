@@ -77,7 +77,7 @@ services:
   observability:
     # Grafana's all-in-one OpenTelemetry backend for development: an OTLP collector plus
     # Prometheus (metrics), Tempo (traces), Loki (logs) and Grafana to explore them.
-    image: grafana/otel-lgtm:0.38.0
+    image: grafana/otel-lgtm:0.38.1
     ports:
       - "13000:3000"   # Grafana UI (user admin / admin)
       # 4317/4318 are inside a range Windows reserves, hence 14317/14318
